@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>員工績效獎金管理系統 - 最終整合版</title>
+    <title>獎金管理系統 - 手動微調強化版</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
     <style>
@@ -29,7 +29,10 @@
         .unlocked .secret-data { filter: none; pointer-events: auto; }
         table { width: 100%; border-collapse: collapse; margin-top: 20px; background: white; }
         th, td { border: 1px solid #eee; padding: 12px; text-align: center; }
-        .adjust-input { width: 90px; color: var(--success); font-weight: bold; border: 1px dashed var(--success); text-align: center; }
+        
+        /* 修改框樣式：更明顯 */
+        .adjust-input { width: 100px; padding: 5px; color: var(--success); font-weight: bold; border: 2px dashed var(--success); text-align: center; border-radius: 4px; font-size: 1rem; }
+        .adjust-input:focus { background: #eaffea; border-style: solid; outline: none; }
         
         #chartArea { height: 350px; margin-top: 20px; }
         .section-label { display: block; margin-bottom: 10px; font-weight: bold; color: var(--primary); }
@@ -39,7 +42,7 @@
 
 <div class="container">
     <div class="card">
-        <h2 id="trendTitle">1. 績效與專案評分</h2>
+        <h2 id="trendTitle">1. 分數輸入 (助理)</h2>
         <div class="input-row">
             <div class="input-group">
                 <label>選擇員工</label>
@@ -49,14 +52,14 @@
                 <label>考評年度</label>
                 <input type="number" id="calcYear" value="2025">
             </div>
-            <button class="btn btn-green" onclick="handleFinalSave()">✅ 確認並正式存檔</button>
+            <button class="btn btn-green" onclick="handleFinalSave()">✅ 確認金額並存檔</button>
             <button class="btn" style="background: #95a5a6; color: white;" onclick="downloadChartJPG()">下載趨勢 JPG</button>
         </div>
         
         <span class="section-label" id="perfLabel">績效分數</span>
         <div id="scoreInputs" class="score-container"></div>
 
-        <span class="section-label">專案分數 (12個月加權)</span>
+        <span class="section-label">專案分數 (12個月)</span>
         <div id="projInputs" class="score-container"></div>
 
         <div id="chartArea"><canvas id="trendChart"></canvas></div>
@@ -64,20 +67,21 @@
 
     <div class="card" id="bonusZone">
         <div style="display: flex; justify-content: space-between; align-items: center;">
-            <h2>2. 獎金試算明細 (主管核定)</h2>
-            <button class="btn btn-red" id="unlockBtn" onclick="askPassword()">🔒 解鎖金額</button>
+            <h2>2. 獎金核定 (可手動加減)</h2>
+            <button class="btn btn-red" id="unlockBtn" onclick="askPassword()">🔒 解鎖金額修改</button>
         </div>
         <div class="secret-data">
             <table>
                 <thead>
                     <tr>
-                        <th>姓名</th><th>績效平均</th><th>專案平均</th>
-                        <th>五一 (實付)</th><th>端午 (實付)</th><th>中秋 (實付)</th><th>年終 (實付)</th>
-                        <th>系統總計</th>
+                        <th>姓名</th><th>績效平均</th><th>專案獎金</th>
+                        <th>五一</th><th>端午</th><th>中秋</th><th>年終</th>
+                        <th style="background: #fff3cd;">應付總計</th>
                     </tr>
                 </thead>
                 <tbody id="resultBody"></tbody>
             </table>
+            <p style="color: #666; font-size: 0.85rem; margin-top: 10px;">* 綠色虛線框內可直接修改數字，總計將自動重新計算。</p>
         </div>
     </div>
 </div>
@@ -98,34 +102,29 @@
                 sel.innerHTML = result.data.map(e => `<option value="${e.name}" data-rank="${e.rank}">${e.name} (${e.rank})</option>`).join('');
                 updateUI();
             }
-        } catch (err) { console.error("連線錯誤:", err); }
+        } catch (err) { console.error("API 連線錯誤"); }
     };
 
     function updateUI() {
         const sel = document.getElementById('selEmp');
         const rank = sel.options[sel.selectedIndex].dataset.rank;
-        const empName = sel.value;
-        
-        document.getElementById('trendTitle').innerText = `1. 績效與專案評分 - ${empName} (${rank})`;
-
-        // 1. 績效連動
         const sBox = document.getElementById('scoreInputs');
+        const pBox = document.getElementById('projInputs');
+        
         let isL1 = (rank === 'L1');
-        let sCount = isL1 ? 12 : 4;
         document.getElementById('perfLabel').innerText = isL1 ? "績效分數 (每月)" : "績效分數 (每季)";
         
+        // 生成績效框
         let sHtml = '';
-        for(let i=1; i<=sCount; i++) {
-            let label = isL1 ? i+'月' : 'Q'+i;
-            sHtml += `<div style="text-align:center;"><small>${label}</small><br><input type="number" class="q-score" value="" onchange="onInputChanged()"></div>`;
+        for(let i=1; i<=(isL1?12:4); i++) {
+            sHtml += `<div style="text-align:center;"><small>${isL1?i+'月':'Q'+i}</small><br><input type="number" class="q-score" onchange="onInputChanged()"></div>`;
         }
         sBox.innerHTML = sHtml;
 
-        // 2. 專案連動 (固定12個月)
-        const pBox = document.getElementById('projInputs');
+        // 生成專案框
         let pHtml = '';
         for(let i=1; i<=12; i++) {
-            pHtml += `<div style="text-align:center;"><small>${i}月</small><br><input type="number" class="p-score" value="" onchange="onInputChanged()"></div>`;
+            pHtml += `<div style="text-align:center;"><small>${i}月</small><br><input type="number" class="p-score" onchange="onInputChanged()"></div>`;
         }
         pBox.innerHTML = pHtml;
 
@@ -139,43 +138,12 @@
         autoLiveCalc(); 
     }
 
-    function updateChart() {
-        const scores = Array.from(document.querySelectorAll('.q-score')).map(i => i.value === "" ? null : parseFloat(i.value));
-        const labels = scores.map((_, i) => {
-            const rank = document.getElementById('selEmp').options[document.getElementById('selEmp').selectedIndex].dataset.rank;
-            return rank === 'L1' ? (i+1)+'月' : 'Q'+(i+1);
-        });
-
-        const ctx = document.getElementById('trendChart').getContext('2d');
-        if (trendChart) trendChart.destroy();
-        
-        trendChart = new Chart(ctx, {
-            type: 'line',
-            data: {
-                labels: labels,
-                datasets: [{
-                    label: '績效趨勢',
-                    data: scores,
-                    borderColor: '#3498db',
-                    backgroundColor: 'rgba(52, 152, 219, 0.1)',
-                    fill: true,
-                    tension: 0.3,
-                    pointRadius: 6,
-                    pointBackgroundColor: '#2c3e50'
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    datalabels: {
-                        align: 'top', anchor: 'end', backgroundColor: '#2c3e50', color: 'white', borderRadius: 4, font: { weight: 'bold' },
-                        formatter: v => v === null ? '' : v
-                    },
-                    legend: { display: false }
-                }
-            }
-        });
+    // 計算總計的函式
+    function refreshTotal() {
+        const adjs = Array.from(document.querySelectorAll('.adjust-input')).map(i => parseFloat(i.value) || 0);
+        const projBonus = parseFloat(document.getElementById('displayProjBonus').innerText.replace(/,/g, '')) || 0;
+        const newTotal = adjs.reduce((a, b) => a + b, 0) + projBonus;
+        document.getElementById('displayTotal').innerText = newTotal.toLocaleString();
     }
 
     async function autoLiveCalc() {
@@ -200,7 +168,71 @@
                 <tr>
                     <td>${document.getElementById('selEmp').value}</td>
                     <td>${d.avgScore}</td>
-                    <td>${d.avgProjScore}</td>
-                    <td><input type="number" class="adjust-input" value="${d.f1}"></td>
-                    <td><input type="number" class="adjust-input" value="${d.f2}"></td>
-                    <td><input type="number" class="adjust-input" value="${d.f
+                    <td id="displayProjBonus">${d.proj.toLocaleString()}</td>
+                    <td><input type="number" class="adjust-input" value="${d.f1}" oninput="refreshTotal()"></td>
+                    <td><input type="number" class="adjust-input" value="${d.f2}" oninput="refreshTotal()"></td>
+                    <td><input type="number" class="adjust-input" value="${d.f3}" oninput="refreshTotal()"></td>
+                    <td><input type="number" class="adjust-input" value="${d.ye}" oninput="refreshTotal()"></td>
+                    <td style="color:red; font-weight:bold; font-size:1.2rem; background:#fff3cd;" id="displayTotal">${d.systemTotal.toLocaleString()}</td>
+                </tr>
+            `;
+        }
+    }
+
+    async function handleFinalSave() {
+        if (!currentCalcData) return alert("請先填寫分數！");
+        
+        // 抓取「目前畫面上」修改後的金額
+        const adjs = Array.from(document.querySelectorAll('.adjust-input')).map(i => parseFloat(i.value) || 0);
+        const finalTotal = parseFloat(document.getElementById('displayTotal').innerText.replace(/,/g, ''));
+        const name = document.getElementById('selEmp').value;
+        const rank = document.getElementById('selEmp').options[document.getElementById('selEmp').selectedIndex].dataset.rank;
+
+        const res = await fetch(API_URL, {
+            method: "POST",
+            body: JSON.stringify({
+                action: "saveRecord",
+                year: document.getElementById('calcYear').value,
+                empName: name, rank: rank, avgScore: currentCalcData.avgScore,
+                f1: adjs[0], f2: adjs[1], f3: adjs[2], ye: adjs[3], total: finalTotal
+            })
+        });
+        const r = await res.json();
+        if(r.status === "success") alert("✅ 資料已成功存檔！");
+    }
+
+    function askPassword() {
+        if(prompt("主管解鎖密碼：") === "0000") {
+            document.getElementById('bonusZone').classList.add('unlocked');
+            document.getElementById('unlockBtn').innerText = "🔓 已解鎖 (可編輯)";
+        }
+    }
+
+    function updateChart() {
+        const scores = Array.from(document.querySelectorAll('.q-score')).map(i => i.value === "" ? null : parseFloat(i.value));
+        const labels = scores.map((_, i) => {
+            const rank = document.getElementById('selEmp').options[document.getElementById('selEmp').selectedIndex].dataset.rank;
+            return rank === 'L1' ? (i+1)+'月' : 'Q'+(i+1);
+        });
+        const ctx = document.getElementById('trendChart').getContext('2d');
+        if (trendChart) trendChart.destroy();
+        trendChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [{ label: '績效', data: scores, borderColor: '#3498db', pointRadius: 6 }]
+            },
+            options: { responsive: true, maintainAspectRatio: false }
+        });
+    }
+
+    function downloadChartJPG() {
+        const canvas = document.getElementById('trendChart');
+        const link = document.createElement('a');
+        link.download = `績效_${document.getElementById('selEmp').value}.jpg`;
+        link.href = canvas.toDataURL('image/jpeg', 1.0);
+        link.click();
+    }
+</script>
+</body>
+</html>
