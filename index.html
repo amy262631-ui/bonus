@@ -2,7 +2,7 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <title>獎金管理系統 - 年度變動 Snapshot 版</title>
+    <title>獎金管理系統 - 全功能最終版</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         :root { --primary: #2c3e50; --accent: #3498db; --success: #27ae60; --lock: #e74c3c; --bg: #f4f7f6; }
@@ -10,11 +10,14 @@
         .card { background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); margin-bottom: 20px; }
         .score-container { display: flex; flex-wrap: wrap; gap: 8px; background: #f8f9fa; padding: 15px; border-radius: 10px; }
         .q-score { width: 60px; height: 35px; text-align: center; border: 2px solid var(--accent); border-radius: 6px; }
-        .adjust-input { width: 90px; color: #d35400; font-weight: bold; border: 2px dashed #e67e22; text-align: center; }
+        .adjust-input { width: 90px; color: #d35400; font-weight: bold; border: 2px dashed #e67e22; text-align: center; background: #fffaf0; }
+        
         #adminZone { display: none; }
         .timeline-table { width: 100%; border-collapse: collapse; background: #fffdf0; margin-bottom: 20px; }
         .timeline-table th, td { border: 1px solid #ddd; padding: 10px; text-align: center; }
-        .total-cell { background: #fff3cd; color: red; font-weight: bold; }
+        .total-cell { background: #fff3cd; color: red; font-weight: bold; font-size: 1.2rem; }
+        
+        .btn { padding: 12px 20px; border: none; border-radius: 6px; cursor: pointer; color: white; font-weight: bold; transition: 0.3s; }
     </style>
 </head>
 <body oncontextmenu="return false;">
@@ -23,8 +26,8 @@
     <h2>1. 績效評分輸入</h2>
     <div style="display: flex; gap: 10px; align-items: flex-end; margin-bottom: 15px;">
         員工：<select id="selEmp" onchange="initUI()"></select>
-        年度：<input type="number" id="calcYear" value="2025" style="width:65px;">
-        <button class="btn" style="background:var(--lock); color:white; padding:10px;" onclick="askPassword()">🔒 主管解鎖/變動設定</button>
+        年度：<input type="number" id="calcYear" value="2025" style="width:65px;" onchange="autoCalc()">
+        <button class="btn" style="background:var(--lock);" id="unlockBtn" onclick="askPassword()">🔒 主管解鎖/變動設定</button>
     </div>
     <div id="scoreInputs" class="score-container"></div>
     <div style="height: 250px;"><canvas id="scoreChart"></canvas></div>
@@ -32,29 +35,31 @@
 
 <div id="adminZone">
     <div class="card">
-        <h2 style="color:#e67e22">2. 年度異動 Snapshot (處理晉升/調薪)</h2>
+        <h2 style="color:#e67e22">2. 年度異動 Snapshot (晉升/調薪)</h2>
         <table class="timeline-table">
             <thead><tr><th>季度</th><th>Q1 (五一)</th><th>Q2 (端午)</th><th>Q3 (中秋)</th><th>Q4 (年終)</th></tr></thead>
             <tbody id="timelineBody"></tbody>
         </table>
-        <button onclick="autoCalc()" style="background:var(--accent); color:white; padding:10px; border:none; border-radius:5px;">套用異動並重新計算</button>
+        <button class="btn" style="background:var(--accent)" onclick="autoCalc()">套用異動並重新計算</button>
     </div>
 
     <div class="card">
         <h2>3. 獎金核定與歷年趨勢</h2>
         <table style="width:100%;">
-            <thead><tr><th>姓名</th><th>年度</th><th>五一</th><th>端午</th><th>中秋</th><th>年終</th><th>總計</th></tr></thead>
+            <thead><tr><th>姓名</th><th>年度</th><th>平均分</th><th>五一</th><th>端午</th><th>中秋</th><th>年終</th><th>總計</th></tr></thead>
             <tbody id="resultBody"></tbody>
         </table>
-        <div style="text-align:right; margin-top:15px;">
-            <button onclick="handleSave()" style="background:var(--success); color:white; padding:15px; border:none; border-radius:5px; font-weight:bold;">✅ 儲存年度紀錄</button>
+        
+        <div id="saveBtnArea" style="text-align:right; margin-top:20px;">
+            <button onclick="handleSave()" class="btn" style="background:var(--success); padding: 15px 40px; font-size: 1.1rem;">✅ 儲存年度紀錄</button>
         </div>
+        
         <div style="height: 300px; margin-top:20px;"><canvas id="yearTrendChart"></canvas></div>
     </div>
 </div>
 
 <script>
-    const API_URL = "https://script.google.com/macros/s/AKfycbz9kLPJjKS5XZsYmgy_Hk77YKKL7X_8qIJkQrNGyJLEcGb3XKrb0lotAjcNhRCL5EXB/exec"; 
+    const API_URL = "https://script.google.com/macros/s/AKfycbz9kLPJjKS5XZsYmgy_Hk77YKKL7X_8qIJkQrNGyJLEcGb3XKrb0lotAjcNhRCL5EXB/exec"; // <--- 記得換成新的網址
     let scoreChart = null, yearTrendChart = null, timelineData = {};
 
     window.onload = async () => {
@@ -72,6 +77,7 @@
         
         timelineData = { Q1:{r:rank,s:0}, Q2:{r:rank,s:0}, Q3:{r:rank,s:0}, Q4:{r:rank,s:0} };
         renderTimeline();
+        autoCalc();
     }
 
     function renderTimeline() {
@@ -86,48 +92,75 @@
 
     async function autoCalc() {
         const scores = Array.from(document.querySelectorAll('.q-score')).map(i => parseFloat(i.value) || null);
-        for(let i=1; i<=4; i++) {
-            timelineData["Q"+i] = { r: document.getElementById(`t_r_Q${i}`).value, s: parseFloat(document.getElementById(`t_s_Q${i}`).value) || 0 };
+        
+        // 如果主管區已開，更新 timelineData
+        if(document.getElementById('t_r_Q1')) {
+            for(let i=1; i<=4; i++) {
+                timelineData["Q"+i] = { r: document.getElementById(`t_r_Q${i}`).value, s: parseFloat(document.getElementById(`t_s_Q${i}`).value) || 0 };
+            }
         }
+
         const res = await fetch(API_URL, {
             method: "POST",
             body: JSON.stringify({ action: "calculateBonus", empName: document.getElementById('selEmp').value, year: document.getElementById('calcYear').value, scores, timeline: timelineData })
         });
         const r = await res.json();
+        
         if(r.status === "success") {
+            // 歷史回填
+            if(r.historyScores) {
+                const hist = JSON.parse(r.historyScores);
+                const qIn = document.querySelectorAll('.q-score');
+                hist.s.forEach((v, i) => { if(v && !qIn[i].value) qIn[i].value = v; });
+            }
+
             document.getElementById('resultBody').innerHTML = `
                 <tr>
-                    <td>${document.getElementById('selEmp').value}</td><td>${document.getElementById('calcYear').value}</td>
-                    <td><input type="number" class="adjust-input" id="adj_f1" value="${r.data.f1}"></td>
-                    <td><input type="number" class="adjust-input" id="adj_f2" value="${r.data.f2}"></td>
-                    <td><input type="number" class="adjust-input" id="adj_f3" value="${r.data.f3}"></td>
-                    <td><input type="number" class="adjust-input" id="adj_ye" value="${r.data.ye}"></td>
+                    <td>${document.getElementById('selEmp').value}</td>
+                    <td>${document.getElementById('calcYear').value}</td>
+                    <td>${r.data.avgScore}</td>
+                    <td><input type="number" class="adjust-input" id="adj_f1" value="${r.data.f1}" oninput="refreshTotal()"></td>
+                    <td><input type="number" class="adjust-input" id="adj_f2" value="${r.data.f2}" oninput="refreshTotal()"></td>
+                    <td><input type="number" class="adjust-input" id="adj_f3" value="${r.data.f3}" oninput="refreshTotal()"></td>
+                    <td><input type="number" class="adjust-input" id="adj_ye" value="${r.data.ye}" oninput="refreshTotal()"></td>
                     <td class="total-cell" id="totalCell">${(r.data.f1+r.data.f2+r.data.f3+r.data.ye).toLocaleString()}</td>
                 </tr>`;
+            updateScoreChart();
         }
+    }
+
+    function refreshTotal() {
+        const adjs = ["f1","f2","f3","ye"].map(id => parseFloat(document.getElementById("adj_"+id).value) || 0);
+        document.getElementById('totalCell').innerText = adjs.reduce((a,b)=>a+b,0).toLocaleString();
     }
 
     async function askPassword() {
         const p = prompt("主管密碼：");
         const res = await fetch(API_URL, { method: "POST", body: JSON.stringify({ action: "verifyPassword", password: p }) });
-        if((await res.json()).status === "success") {
+        const r = await res.json();
+        if(r.status === "success") {
             document.getElementById('adminZone').style.display = 'block';
+            document.getElementById('unlockBtn').style.display = 'none';
             loadTrend();
         } else alert("密碼錯誤");
     }
 
     async function handleSave() {
+        const btn = event.target;
+        btn.disabled = true; btn.innerText = "儲存中...";
+
         const adjs = ["f1","f2","f3","ye"].map(id => parseFloat(document.getElementById("adj_"+id).value) || 0);
         const res = await fetch(API_URL, {
             method: "POST",
             body: JSON.stringify({
                 action: "saveRecord", year: document.getElementById('calcYear').value, empName: document.getElementById('selEmp').value,
-                rank: timelineData.Q4.r, f1: adjs[0], f2: adjs[1], f3: adjs[2], ye: adjs[3],
-                total: adjs.reduce((a,b)=>a+b, 0), scores: Array.from(document.querySelectorAll('.q-score')).map(i=>i.value),
-                timeline: timelineData, avgScore: 0
+                rank: timelineData.Q4.r, avgScore: document.querySelector('#resultBody td:nth-child(3)').innerText,
+                f1: adjs[0], f2: adjs[1], f3: adjs[2], ye: adjs[3], total: adjs.reduce((a,b)=>a+b,0),
+                scores: Array.from(document.querySelectorAll('.q-score')).map(i=>i.value), timeline: timelineData
             })
         });
-        if((await res.json()).status === "success") { alert("✅ 年度異動 Snapshot 存檔成功"); loadTrend(); }
+        if((await res.json()).status === "success") { alert("✅ 存檔成功！"); loadTrend(); }
+        btn.disabled = false; btn.innerText = "✅ 儲存年度紀錄";
     }
 
     async function loadTrend() {
@@ -138,6 +171,17 @@
         yearTrendChart = new Chart(ctx, {
             type: 'bar',
             data: { labels: r.data.map(d=>d.year+'年'), datasets: [{ label: '歷年實領總額', data: r.data.map(d=>d.total), backgroundColor: '#27ae60' }] },
+            options: { maintainAspectRatio: false }
+        });
+    }
+
+    function updateScoreChart() {
+        const scores = Array.from(document.querySelectorAll('.q-score')).map(i => i.value===""?null:parseFloat(i.value));
+        const ctx = document.getElementById('scoreChart').getContext('2d');
+        if (scoreChart) scoreChart.destroy();
+        scoreChart = new Chart(ctx, {
+            type: 'line',
+            data: { labels: scores.map((_,i)=>i+1), datasets: [{ label: '評分趨勢', data: scores, borderColor: '#3498db' }] },
             options: { maintainAspectRatio: false }
         });
     }
