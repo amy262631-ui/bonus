@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>公司內勤人員獎金管理系統</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+    <style>
+        :root { --primary: #2c3e50; --secondary: #3498db; --success: #27ae60; }
+        body { font-family: "Microsoft JhengHei", sans-serif; background: #f0f2f5; margin: 0; padding: 20px; }
+        .container { max-width: 1200px; margin: auto; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
+        .tab-btn { padding: 10px 20px; cursor: pointer; border: none; background: #ddd; margin-right: 5px; border-radius: 5px 5px 0 0; }
+        .tab-btn.active { background: var(--secondary); color: white; }
+        .tab-content { border: 1px solid #ddd; padding: 20px; border-radius: 0 5px 5px 5px; display: none; }
+        .tab-content.active { display: block; }
+        .input-row { margin-bottom: 15px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+        input, select { padding: 8px; border: 1px solid #ccc; border-radius: 4px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { border: 1px solid #eee; padding: 12px; text-align: center; }
+        th { background: var(--primary); color: white; }
+        .btn { padding: 10px 15px; border: none; border-radius: 4px; color: white; cursor: pointer; transition: 0.3s; }
+        .btn-blue { background: var(--secondary); }
+        .btn-green { background: var(--success); }
+        .btn-gray { background: #7f8c8d; }
+        #loginOverlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: white; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 9999; }
+        @media print { .no-print { display: none !important; } .container { box-shadow: none; } body { background: white; } }
+    </style>
+</head>
+<body>
+
+<div id="loginOverlay">
+    <h1>獎金系統管理後台</h1>
+    <p>請輸入管理員密碼以進入</p>
+    <input type="password" id="adminPwd" style="font-size: 1.2rem; width: 250px;">
+    <br>
+    <button class="btn btn-blue" onclick="initSystem()" style="width: 250px;">登入</button>
+</div>
+
+<div class="container">
+    <div class="no-print">
+        <h1>內勤人員獎金與薪資管理系統</h1>
+        <div style="margin-bottom: 10px;">
+            <button class="tab-btn active" onclick="showTab('calc')">獎金試算</button>
+            <button class="tab-btn" onclick="showTab('mgmt')">高階主管：調薪與人員管理</button>
+            <button class="tab-btn" onclick="showTab('stats')">歷史與年度分析</button>
+        </div>
+    </div>
+
+    <div id="tab-calc" class="tab-content active">
+        <h2>年度獎金試算</h2>
+        <div class="input-row no-print">
+            選擇員工：<select id="selEmp" onchange="updateRankHint()"></select>
+            年度：<input type="number" id="calcYear" value="2025" style="width: 80px;">
+            <span id="rankHint" style="color: blue; font-weight: bold;"></span>
+        </div>
+        <div id="scoreArea" class="input-row no-print">
+            </div>
+        <div class="input-row no-print">
+            專案表現分數：<input type="number" id="projScore" placeholder="例如: 67.8" style="width: 100px;">
+            <button class="btn btn-green" onclick="startCalc()">開始計算金額</button>
+        </div>
+
+        <table id="resultTable">
+            <thead>
+                <tr>
+                    <th>姓名</th><th>職等</th><th>年度</th><th>系統應付金額</th><th>主管核定實付</th><th>備註</th><th class="no-print">操作</th>
+                </tr>
+            </thead>
+            <tbody id="resultBody"></tbody>
+        </table>
+        
+        <div class="no-print" style="margin-top: 20px;">
+            <button class="btn btn-blue" onclick="exportToExcel()">下載 Excel 報表</button>
+            <button class="btn btn-gray" onclick="window.print()">列印正式核定單</button>
+        </div>
+    </div>
+
+    <div id="tab-mgmt" class="tab-content">
+        <h2>高階主管：調薪管理介面</h2>
+        <p>在此修改將直接同步至 Google Sheets 後台資料庫。</p>
+        <div class="input-row">
+            姓名：<input type="text" id="mName">
+            職等：<select id="mRank">
+                <option value="L1">L1 助理</option><option value="L2">L2 專員</option>
+                <option value="L3">L3 資深</option><option value="L4">L4 主管</option>
+            </select>
+            最新薪資：<input type="number" id="mSalary">
+            入職日期：<input type="date" id="mDate">
+            <button class="btn btn-green" onclick="submitSalaryUpdate()">更新/新增員工</button>
+        </div>
+    </div>
+
+    <div id="tab-stats" class="tab-content">
+        <h2>年度與歷史獎金比較圖表</h2>
+        <button class="btn btn-blue" onclick="refreshAnalysis()">刷新並分析數據</button>
+        <div style="max-width: 800px; margin: 30px auto;">
+            <canvas id="analysisChart"></canvas>
+        </div>
+    </div>
+</div>
+
+<script>
+    // --- 關鍵設定：請貼上你的 API 網址 ---
+    const API_URL = "https://script.google.com/macros/s/AKfycbz9kLPJjKS5XZsYmgy_Hk77YKKL7X_8qIJkQrNGyJLEcGb3XKrb0lotAjcNhRCL5EXB/exec";
+    let currentAdminPwd = "";
+    let empList = [];
+    let myChart = null;
+
+    async function apiRequest(action, data = {}) {
+        try {
+            const response = await fetch(API_URL, {
+                method: "POST",
+                body: JSON.stringify({ password: currentAdminPwd, action: action, ...data })
+            });
+            const result = await response.json();
+            if (result.status === "error") throw new Error(result.msg);
+            return result;
+        } catch (err) { alert(err.message); return null; }
+    }
+
+    async function initSystem() {
+        currentAdminPwd = document.getElementById('adminPwd').value;
+        const res = await apiRequest("getEmployeeList");
+        if (res) {
+            empList = res.data;
+            document.getElementById('loginOverlay').style.display = 'none';
+            populateEmpSelect();
+        }
+    }
+
+    function populateEmpSelect() {
+        const sel = document.getElementById('selEmp');
+        sel.innerHTML = empList.map(e => `<option value="${e.name}" data-rank="${e.rank}">${e.name} (${e.rank})</option>`).join('');
+        updateRankHint();
+    }
+
+    function updateRankHint() {
+        const sel = document.getElementById('selEmp');
+        const rank = sel.options[sel.selectedIndex].dataset.rank;
+        const area = document.getElementById('scoreArea');
+        document.getElementById('rankHint').innerText = `目前職等：${rank}`;
+        
+        // 根據職等決定分數輸入框數量 (L1=12個月, L2-L4=4季)
+        let count = (rank === "L1") ? 12 : 4;
+        let label = (rank === "L1") ? "月分數" : "季分數";
+        area.innerHTML = `${label}：` + Array.from({length: count}, (_, i) => `<input type="number" class="score-input" placeholder="${i+1}" style="width:45px; margin-right:3px;">`).join('');
+    }
+
+    async function startCalc() {
+        const name = document.getElementById('selEmp').value;
+        const scores = Array.from(document.querySelectorAll('.score-input')).map(i => parseFloat(i.value || 0));
+        const projScore = parseFloat(document.getElementById('projScore').value || 0);
+        const year = document.getElementById('calcYear').value;
+
+        const res = await apiRequest("calculateBonus", { empName: name, scores: scores, projScore: projScore, year: year });
+        if (res) {
+            const body = document.getElementById('resultBody');
+            body.innerHTML += `
+                <tr data-name="${name}" data-rank="${res.data.rank}" data-year="${year}">
+                    <td>${name}</td><td>${res.data.rank}</td><td>${year}</td>
+                    <td class="sys-pay">${res.data.systemPay.toLocaleString()}</td>
+                    <td><input type="number" class="actual-pay" value="${res.data.systemPay}" style="width:100px;"></td>
+                    <td><input type="text" class="note" placeholder="備註"></td>
+                    <td class="no-print"><button class="btn btn-green" onclick="saveRecord(this)">確認並存檔</button></td>
+                </tr>
+            `;
+        }
+    }
+
+    async function saveRecord(btn) {
+        const row = btn.closest('tr');
+        const data = {
+            name: row.dataset.name, rank: row.dataset.rank,
+            systemPay: parseFloat(row.querySelector('.sys-pay').innerText.replace(/,/g,'')),
+            actualPay: parseFloat(row.querySelector('.actual-pay').value),
+            note: row.querySelector('.note').value
+        };
+        const res = await apiRequest("save", { action: "save", data: data });
+        if (res) { alert("發放資料已儲存至歷史紀錄"); btn.disabled = true; btn.innerText = "已存檔"; }
+    }
+
+    async function submitSalaryUpdate() {
+        const data = {
+            empName: document.getElementById('mName').value,
+            rank: document.getElementById('mRank').value,
+            salary: parseFloat(document.getElementById('mSalary').value),
+            hireDate: document.getElementById('mDate').value
+        };
+        const res = await apiRequest("updateSalary", data);
+        if (res) { alert(res.msg); location.reload(); }
+    }
+
+    async function refreshAnalysis() {
+        const res = await apiRequest("getData");
+        if (res) {
+            const ctx = document.getElementById('analysisChart').getContext('2d');
+            if (myChart) myChart.destroy();
+            myChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: res.data.map(r => r[1]), // 姓名
+                    datasets: [{ label: '實發金額', data: res.data.map(r => r[4]), backgroundColor: '#3498db' }]
+                }
+            });
+        }
+    }
+
+    function showTab(id) {
+        document.querySelectorAll('.tab-content, .tab-btn').forEach(el => el.classList.remove('active'));
+        document.getElementById(`tab-${id}`).classList.add('active');
+        document.querySelector(`button[onclick="showTab('${id}')"]`).classList.add('active');
+    }
+
+    function exportToExcel() {
+        const wb = XLSX.utils.table_to_book(document.getElementById("resultTable"));
+        XLSX.writeFile(wb, "獎金核定報表.xlsx");
+    }
+</script>
+</body>
+</html>
