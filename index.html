@@ -3,218 +3,197 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>公司內勤人員獎金管理系統</title>
+    <title>員工績效與獎金管理系統</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
     <style>
-        :root { --primary: #2c3e50; --secondary: #3498db; --success: #27ae60; }
-        body { font-family: "Microsoft JhengHei", sans-serif; background: #f0f2f5; margin: 0; padding: 20px; }
-        .container { max-width: 1200px; margin: auto; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
-        .tab-btn { padding: 10px 20px; cursor: pointer; border: none; background: #ddd; margin-right: 5px; border-radius: 5px 5px 0 0; }
-        .tab-btn.active { background: var(--secondary); color: white; }
-        .tab-content { border: 1px solid #ddd; padding: 20px; border-radius: 0 5px 5px 5px; display: none; }
-        .tab-content.active { display: block; }
-        .input-row { margin-bottom: 15px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-        input, select { padding: 8px; border: 1px solid #ccc; border-radius: 4px; }
+        :root { --primary: #2c3e50; --bg: #f4f7f6; --accent: #3498db; --lock: #e74c3c; }
+        body { font-family: "Microsoft JhengHei", sans-serif; background: var(--bg); margin: 0; padding: 20px; }
+        .card { background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); margin-bottom: 20px; }
+        h2 { color: var(--primary); border-left: 5px solid var(--accent); padding-left: 10px; margin-top: 0; }
+        .input-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px; }
+        .score-box { background: #f8f9fa; padding: 15px; border-radius: 8px; border: 1px solid #dee2e6; }
+        input, select { width: 100%; padding: 10px; margin-top: 5px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+        .btn { padding: 12px 20px; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; transition: 0.3s; }
+        .btn-blue { background: var(--accent); color: white; }
+        .btn-red { background: var(--lock); color: white; }
         table { width: 100%; border-collapse: collapse; margin-top: 20px; }
         th, td { border: 1px solid #eee; padding: 12px; text-align: center; }
-        th { background: var(--primary); color: white; }
-        .btn { padding: 10px 15px; border: none; border-radius: 4px; color: white; cursor: pointer; transition: 0.3s; }
-        .btn-blue { background: var(--secondary); }
-        .btn-green { background: var(--success); }
-        .btn-gray { background: #7f8c8d; }
-        #loginOverlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: white; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 9999; }
-        @media print { .no-print { display: none !important; } .container { box-shadow: none; } body { background: white; } }
+        th { background: #f2f2f2; }
+        .secret-data { filter: blur(5px); pointer-events: none; user-select: none; }
+        .unlocked .secret-data { filter: none; pointer-events: auto; }
+        #chartArea { height: 350px; }
     </style>
 </head>
 <body>
 
-<div id="loginOverlay">
-    <h1>獎金系統管理後台</h1>
-    <p>請輸入管理員密碼以進入</p>
-    <input type="password" id="adminPwd" style="font-size: 1.2rem; width: 250px;">
-    <br>
-    <button class="btn btn-blue" onclick="initSystem()" style="width: 250px;">登入</button>
-</div>
-
 <div class="container">
-    <div class="no-print">
-        <h1>內勤人員獎金與薪資管理系統</h1>
-        <div style="margin-bottom: 10px;">
-            <button class="tab-btn active" onclick="showTab('calc')">獎金試算</button>
-            <button class="tab-btn" onclick="showTab('mgmt')">高階主管：調薪與人員管理</button>
-            <button class="tab-btn" onclick="showTab('stats')">歷史與年度分析</button>
-        </div>
-    </div>
-
-    <div id="tab-calc" class="tab-content active">
-        <h2>年度獎金試算</h2>
-        <div class="input-row no-print">
-            選擇員工：<select id="selEmp" onchange="updateRankHint()"></select>
-            年度：<input type="number" id="calcYear" value="2025" style="width: 80px;">
-            <span id="rankHint" style="color: blue; font-weight: bold;"></span>
-        </div>
-        <div id="scoreArea" class="input-row no-print">
+    <div class="card">
+        <h2>1. 員工績效分數輸入 (人資助理用)</h2>
+        <div class="input-grid">
+            <div>
+                <label>選擇員工</label>
+                <select id="selEmp" onchange="loadEmployeeTrend()"></select>
             </div>
-        <div class="input-row no-print">
-            專案表現分數：<input type="number" id="projScore" placeholder="例如: 67.8" style="width: 100px;">
-            <button class="btn btn-green" onclick="startCalc()">開始計算金額</button>
+            <div>
+                <label>考評年度</label>
+                <input type="number" id="calcYear" value="2025">
+            </div>
+            <div>
+                <label>專案表現分數</label>
+                <input type="number" id="projScore" placeholder="0-100">
+            </div>
         </div>
-
-        <table id="resultTable">
-            <thead>
-                <tr>
-                    <th>姓名</th><th>職等</th><th>年度</th><th>系統應付金額</th><th>主管核定實付</th><th>備註</th><th class="no-print">操作</th>
-                </tr>
-            </thead>
-            <tbody id="resultBody"></tbody>
-        </table>
         
-        <div class="no-print" style="margin-top: 20px;">
-            <button class="btn btn-blue" onclick="exportToExcel()">下載 Excel 報表</button>
-            <button class="btn btn-gray" onclick="window.print()">列印正式核定單</button>
+        <div id="scoreInputs" class="score-box">
+            </div>
+        
+        <div style="margin-top: 15px; text-align: right;">
+            <button class="btn btn-blue" onclick="startCalc()">執行計算</button>
         </div>
     </div>
 
-    <div id="tab-mgmt" class="tab-content">
-        <h2>高階主管：調薪管理介面</h2>
-        <p>在此修改將直接同步至 Google Sheets 後台資料庫。</p>
-        <div class="input-row">
-            姓名：<input type="text" id="mName">
-            職等：<select id="mRank">
-                <option value="L1">L1 助理</option><option value="L2">L2 專員</option>
-                <option value="L3">L3 資深</option><option value="L4">L4 主管</option>
-            </select>
-            最新薪資：<input type="number" id="mSalary">
-            入職日期：<input type="date" id="mDate">
-            <button class="btn btn-green" onclick="submitSalaryUpdate()">更新/新增員工</button>
+    <div class="card">
+        <h2>2. 員工得分趨勢分析</h2>
+        <div id="chartArea">
+            <canvas id="trendChart"></canvas>
         </div>
     </div>
 
-    <div id="tab-stats" class="tab-content">
-        <h2>年度與歷史獎金比較圖表</h2>
-        <button class="btn btn-blue" onclick="refreshAnalysis()">刷新並分析數據</button>
-        <div style="max-width: 800px; margin: 30px auto;">
-            <canvas id="analysisChart"></canvas>
+    <div class="card" id="bonusZone">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <h2>3. 獎金試算結果</h2>
+            <button class="btn btn-red" id="unlockBtn" onclick="askPassword()">🔒 輸入密碼查看金額</button>
+        </div>
+        
+        <div class="secret-data">
+            <table id="resultTable">
+                <thead>
+                    <tr>
+                        <th>姓名</th><th>年度平均分</th><th>五一</th><th>端午</th><th>中秋</th><th>年終</th><th>總計</th><th>實付修改</th><th class="no-print">操作</th>
+                    </tr>
+                </thead>
+                <tbody id="resultBody"></tbody>
+            </table>
         </div>
     </div>
 </div>
 
 <script>
-    // --- 關鍵設定：請貼上你的 API 網址 ---
-    const API_URL = "https://script.google.com/macros/s/AKfycbz9kLPJjKS5XZsYmgy_Hk77YKKL7X_8qIJkQrNGyJLEcGb3XKrb0lotAjcNhRCL5EXB/exec";
+    const API_URL = "你的API網址"; // 👈 請填入你的 Apps Script 網址
     let currentAdminPwd = "";
-    let empList = [];
-    let myChart = null;
+    let trendChart = null;
+    let empDataCache = [];
 
-    async function apiRequest(action, data = {}) {
-        try {
-            const response = await fetch(API_URL, {
-                method: "POST",
-                body: JSON.stringify({ password: currentAdminPwd, action: action, ...data })
-            });
-            const result = await response.json();
-            if (result.status === "error") throw new Error(result.msg);
-            return result;
-        } catch (err) { alert(err.message); return null; }
-    }
+    // 初始化：載入名單
+    window.onload = async () => {
+        const res = await fetch(API_URL + "?action=getEmployeeList"); // 假設後端支援 GET 簡單獲取名單
+        // 這裡建議先用一個預設的 fetch 獲取名單，或者手動定義測試
+        fetchList();
+    };
 
-    async function initSystem() {
-        currentAdminPwd = document.getElementById('adminPwd').value;
-        const res = await apiRequest("getEmployeeList");
-        if (res) {
-            empList = res.data;
-            document.getElementById('loginOverlay').style.display = 'none';
-            populateEmpSelect();
-        }
-    }
-
-    function populateEmpSelect() {
+    async function fetchList() {
+        // 為了讓助理能先看到名單，後端需允許不帶密碼獲取姓名與職等
+        const res = await fetch(API_URL, {
+            method: "POST",
+            body: JSON.stringify({ action: "getEmployeeList", password: "PUBLIC_BYPASS" }) 
+        });
+        const result = await res.json();
+        empDataCache = result.data;
         const sel = document.getElementById('selEmp');
-        sel.innerHTML = empList.map(e => `<option value="${e.name}" data-rank="${e.rank}">${e.name} (${e.rank})</option>`).join('');
-        updateRankHint();
+        sel.innerHTML = empDataCache.map(e => `<option value="${e.name}" data-rank="${e.rank}">${e.name} (${e.rank})</option>`).join('');
+        updateScoreUI();
     }
 
-    function updateRankHint() {
+    function updateScoreUI() {
         const sel = document.getElementById('selEmp');
         const rank = sel.options[sel.selectedIndex].dataset.rank;
-        const area = document.getElementById('scoreArea');
-        document.getElementById('rankHint').innerText = `目前職等：${rank}`;
+        const box = document.getElementById('scoreInputs');
+        let type = (rank === 'L1') ? '月份' : '季度';
+        let count = (rank === 'L1') ? 12 : 4;
         
-        // 根據職等決定分數輸入框數量 (L1=12個月, L2-L4=4季)
-        let count = (rank === "L1") ? 12 : 4;
-        let label = (rank === "L1") ? "月分數" : "季分數";
-        area.innerHTML = `${label}：` + Array.from({length: count}, (_, i) => `<input type="number" class="score-input" placeholder="${i+1}" style="width:45px; margin-right:3px;">`).join('');
+        let html = `<strong>${type}評分：</strong><br><div style="display:flex; flex-wrap:wrap; gap:5px; margin-top:10px;">`;
+        for(let i=1; i<=count; i++) {
+            html += `<div style="text-align:center;"><small>${i}${type === '月份' ? '月':'季'}</small><br><input type="number" class="q-score" style="width:50px;" onchange="updateChart()"></div>`;
+        }
+        html += `</div>`;
+        box.innerHTML = html;
+        updateChart();
+    }
+
+    // 曲線圖邏輯
+    function updateChart() {
+        const scores = Array.from(document.querySelectorAll('.q-score')).map(i => parseFloat(i.value) || 0);
+        const labels = Array.from(document.querySelectorAll('.q-score')).map((_, i) => `${i+1}`);
+        
+        const ctx = document.getElementById('trendChart').getContext('2d');
+        if (trendChart) trendChart.destroy();
+        trendChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: '個人評分趨勢',
+                    data: scores,
+                    borderColor: '#3498db',
+                    backgroundColor: 'rgba(52, 152, 219, 0.1)',
+                    fill: true,
+                    tension: 0.4,
+                    pointRadius: 5
+                }]
+            },
+            options: { responsive: true, maintainAspectRatio: false }
+        });
+    }
+
+    // 解鎖密碼
+    function askPassword() {
+        const pwd = prompt("請輸入高階主管管理密碼：");
+        if (pwd) {
+            currentAdminPwd = pwd;
+            document.getElementById('bonusZone').classList.add('unlocked');
+            document.getElementById('unlockBtn').innerText = "🔓 已授權檢視金額";
+            document.getElementById('unlockBtn').classList.replace('btn-red', 'btn-blue');
+        }
     }
 
     async function startCalc() {
         const name = document.getElementById('selEmp').value;
-        const scores = Array.from(document.querySelectorAll('.score-input')).map(i => parseFloat(i.value || 0));
-        const projScore = parseFloat(document.getElementById('projScore').value || 0);
+        const scores = Array.from(document.querySelectorAll('.q-score')).map(i => parseFloat(i.value) || 0);
+        const proj = document.getElementById('projScore').value;
         const year = document.getElementById('calcYear').value;
 
-        const res = await apiRequest("calculateBonus", { empName: name, scores: scores, projScore: projScore, year: year });
-        if (res) {
-            const body = document.getElementById('resultBody');
-            body.innerHTML += `
-                <tr data-name="${name}" data-rank="${res.data.rank}" data-year="${year}">
-                    <td>${name}</td><td>${res.data.rank}</td><td>${year}</td>
-                    <td class="sys-pay">${res.data.systemPay.toLocaleString()}</td>
-                    <td><input type="number" class="actual-pay" value="${res.data.systemPay}" style="width:100px;"></td>
-                    <td><input type="text" class="note" placeholder="備註"></td>
-                    <td class="no-print"><button class="btn btn-green" onclick="saveRecord(this)">確認並存檔</button></td>
+        // 向後端請求計算 (此處需帶密碼，若沒解鎖會報錯)
+        const res = await fetch(API_URL, {
+            method: "POST",
+            body: JSON.stringify({
+                action: "calculateBonus",
+                password: currentAdminPwd,
+                empName: name,
+                scores: scores,
+                projScore: proj,
+                year: year
+            })
+        });
+        const result = await res.json();
+        
+        if(result.status === "success") {
+            const d = result.data;
+            document.getElementById('resultBody').innerHTML += `
+                <tr>
+                    <td>${name}</td>
+                    <td>${d.avgScore}</td>
+                    <td>${d.laborDay}</td>
+                    <td>${d.dragonBoat}</td>
+                    <td>${d.midAutumn}</td>
+                    <td>${d.yearEnd}</td>
+                    <td style="font-weight:bold; color:red;">${d.systemTotal}</td>
+                    <td><input type="number" value="${d.systemTotal}"></td>
+                    <td><button onclick="this.closest('tr').remove()">刪除</button></td>
                 </tr>
             `;
+        } else {
+            alert("計算失敗：" + result.msg + " (可能尚未解鎖或權限不足)");
         }
-    }
-
-    async function saveRecord(btn) {
-        const row = btn.closest('tr');
-        const data = {
-            name: row.dataset.name, rank: row.dataset.rank,
-            systemPay: parseFloat(row.querySelector('.sys-pay').innerText.replace(/,/g,'')),
-            actualPay: parseFloat(row.querySelector('.actual-pay').value),
-            note: row.querySelector('.note').value
-        };
-        const res = await apiRequest("save", { action: "save", data: data });
-        if (res) { alert("發放資料已儲存至歷史紀錄"); btn.disabled = true; btn.innerText = "已存檔"; }
-    }
-
-    async function submitSalaryUpdate() {
-        const data = {
-            empName: document.getElementById('mName').value,
-            rank: document.getElementById('mRank').value,
-            salary: parseFloat(document.getElementById('mSalary').value),
-            hireDate: document.getElementById('mDate').value
-        };
-        const res = await apiRequest("updateSalary", data);
-        if (res) { alert(res.msg); location.reload(); }
-    }
-
-    async function refreshAnalysis() {
-        const res = await apiRequest("getData");
-        if (res) {
-            const ctx = document.getElementById('analysisChart').getContext('2d');
-            if (myChart) myChart.destroy();
-            myChart = new Chart(ctx, {
-                type: 'bar',
-                data: {
-                    labels: res.data.map(r => r[1]), // 姓名
-                    datasets: [{ label: '實發金額', data: res.data.map(r => r[4]), backgroundColor: '#3498db' }]
-                }
-            });
-        }
-    }
-
-    function showTab(id) {
-        document.querySelectorAll('.tab-content, .tab-btn').forEach(el => el.classList.remove('active'));
-        document.getElementById(`tab-${id}`).classList.add('active');
-        document.querySelector(`button[onclick="showTab('${id}')"]`).classList.add('active');
-    }
-
-    function exportToExcel() {
-        const wb = XLSX.utils.table_to_book(document.getElementById("resultTable"));
-        XLSX.writeFile(wb, "獎金核定報表.xlsx");
     }
 </script>
 </body>
