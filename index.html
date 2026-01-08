@@ -84,25 +84,28 @@
     let trendChart = null;
     let empDataCache = [];
 
-    // 初始化：載入名單
     window.onload = async () => {
-        const res = await fetch(API_URL + "?action=getEmployeeList"); // 假設後端支援 GET 簡單獲取名單
-        // 這裡建議先用一個預設的 fetch 獲取名單，或者手動定義測試
-        fetchList();
-    };
-
-    async function fetchList() {
-        // 為了讓助理能先看到名單，後端需允許不帶密碼獲取姓名與職等
+    try {
+        // 直接對 API 網址發送 GET 請求，這會觸發後端的 doGet
         const res = await fetch(API_URL, {
-            method: "POST",
-            body: JSON.stringify({ action: "getEmployeeList", password: "PUBLIC_BYPASS" }) 
+            method: "GET",
+            redirect: "follow"
         });
         const result = await res.json();
-        empDataCache = result.data;
-        const sel = document.getElementById('selEmp');
-        sel.innerHTML = empDataCache.map(e => `<option value="${e.name}" data-rank="${e.rank}">${e.name} (${e.rank})</option>`).join('');
-        updateScoreUI();
+        
+        if (result.status === "success") {
+            empDataCache = result.data;
+            const sel = document.getElementById('selEmp');
+            // 填入下拉選單
+            sel.innerHTML = empDataCache.map(e => 
+                `<option value="${e.name}" data-rank="${e.rank}">${e.name} (${e.rank})</option>`
+            ).join('');
+            updateScoreUI();
+        }
+    } catch (err) {
+        console.error("載入名單失敗:", err);
     }
+};
 
     function updateScoreUI() {
         const sel = document.getElementById('selEmp');
