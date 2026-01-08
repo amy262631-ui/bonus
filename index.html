@@ -2,172 +2,205 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <title>獎金系統 - 專案加權與職等連動版</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>員工績效獎金管理系統 - 最終整合版</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
     <style>
-        :root { --accent: #3498db; --success: #27ae60; --bg: #f4f7f6; }
-        body { font-family: sans-serif; background: var(--bg); padding: 20px; }
-        .card { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); margin-bottom: 20px; }
-        /* 輸入框加大 */
-        .q-score, .p-score { width: 65px; height: 40px; text-align: center; border: 2px solid var(--accent); border-radius: 6px; margin: 2px; }
-        .p-score { border-color: #e67e22; } /* 專案分數用橘色區分 */
-        .btn { padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; color: white; }
-        .section-title { font-weight: bold; margin-top: 15px; color: #2c3e50; display: block; }
-        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-        th, td { border: 1px solid #ddd; padding: 10px; text-align: center; }
-        .adjust-input { width: 80px; text-align: center; color: var(--success); font-weight: bold; }
+        :root { --primary: #2c3e50; --accent: #3498db; --success: #27ae60; --lock: #e74c3c; --bg: #f4f7f6; }
+        body { font-family: "Microsoft JhengHei", sans-serif; background: var(--bg); margin: 0; padding: 20px; color: var(--primary); }
+        .card { background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); margin-bottom: 20px; }
+        h2 { border-left: 5px solid var(--accent); padding-left: 10px; margin-top: 0; }
+        
+        .input-row { display: flex; flex-wrap: wrap; gap: 15px; align-items: flex-end; margin-bottom: 20px; }
+        .input-group { display: flex; flex-direction: column; }
+        input, select { padding: 10px; border: 1px solid #ccc; border-radius: 5px; font-size: 1rem; }
+        
+        .score-container { display: flex; flex-wrap: wrap; gap: 10px; background: #f8f9fa; padding: 15px; border-radius: 10px; border: 1px solid #dee2e6; margin-bottom: 15px; }
+        .q-score { width: 70px; height: 45px; font-size: 1.1rem; text-align: center; border: 2px solid var(--accent); border-radius: 8px; }
+        .p-score { width: 70px; height: 45px; font-size: 1.1rem; text-align: center; border: 2px solid #e67e22; border-radius: 8px; }
+        
+        .btn { padding: 12px 20px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; transition: 0.3s; }
+        .btn-blue { background: var(--accent); color: white; }
+        .btn-green { background: var(--success); color: white; }
+        .btn-red { background: var(--lock); color: white; }
+        
+        .secret-data { filter: blur(10px); pointer-events: none; transition: 0.5s; }
+        .unlocked .secret-data { filter: none; pointer-events: auto; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; background: white; }
+        th, td { border: 1px solid #eee; padding: 12px; text-align: center; }
+        .adjust-input { width: 90px; color: var(--success); font-weight: bold; border: 1px dashed var(--success); text-align: center; }
+        
+        #chartArea { height: 350px; margin-top: 20px; }
+        .section-label { display: block; margin-bottom: 10px; font-weight: bold; color: var(--primary); }
     </style>
 </head>
 <body>
 
-<div class="card">
-    <h2>1. 績效與專案分數輸入 (助理)</h2>
-    <div style="display: flex; gap: 15px; margin-bottom: 15px;">
-        <div>選擇員工：<select id="selEmp" onchange="updateUI()"></select></div>
-        <div>年度：<input type="number" id="calcYear" value="2025" style="width:70px;"></div>
-        <button class="btn" style="background: var(--success);" onclick="handleFinalSave()">正式存檔</button>
+<div class="container">
+    <div class="card">
+        <h2 id="trendTitle">1. 績效與專案評分</h2>
+        <div class="input-row">
+            <div class="input-group">
+                <label>選擇員工</label>
+                <select id="selEmp" onchange="updateUI()"></select>
+            </div>
+            <div class="input-group">
+                <label>考評年度</label>
+                <input type="number" id="calcYear" value="2025">
+            </div>
+            <button class="btn btn-green" onclick="handleFinalSave()">✅ 確認並正式存檔</button>
+            <button class="btn" style="background: #95a5a6; color: white;" onclick="downloadChartJPG()">下載趨勢 JPG</button>
+        </div>
+        
+        <span class="section-label" id="perfLabel">績效分數</span>
+        <div id="scoreInputs" class="score-container"></div>
+
+        <span class="section-label">專案分數 (12個月加權)</span>
+        <div id="projInputs" class="score-container"></div>
+
+        <div id="chartArea"><canvas id="trendChart"></canvas></div>
     </div>
 
-    <span class="section-title" id="scoreTitle">績效評分</span>
-    <div id="scoreInputs" style="display: flex; flex-wrap: wrap; gap: 5px;"></div>
-
-    <span class="section-title">專案評分 (12個月加權平均)</span>
-    <div id="projInputs" style="display: flex; flex-wrap: wrap; gap: 5px;"></div>
-    
-    <div style="height: 300px; margin-top: 20px;"><canvas id="trendChart"></canvas></div>
-</div>
-
-<div class="card">
-    <h2>2. 獎金核定 (主管) <button class="btn" style="background: #e74c3c;" onclick="askUnlock()">🔒 解鎖</button></h2>
-    <div id="bonusZone" style="filter: blur(8px); pointer-events: none;">
-        <table>
-            <thead>
-                <tr><th>姓名</th><th>績效平均</th><th>專案平均</th><th>五一</th><th>端午</th><th>中秋</th><th>年終</th><th>總計</th></tr>
-            </thead>
-            <tbody id="resultBody"></tbody>
-        </table>
+    <div class="card" id="bonusZone">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <h2>2. 獎金試算明細 (主管核定)</h2>
+            <button class="btn btn-red" id="unlockBtn" onclick="askPassword()">🔒 解鎖金額</button>
+        </div>
+        <div class="secret-data">
+            <table>
+                <thead>
+                    <tr>
+                        <th>姓名</th><th>績效平均</th><th>專案平均</th>
+                        <th>五一 (實付)</th><th>端午 (實付)</th><th>中秋 (實付)</th><th>年終 (實付)</th>
+                        <th>系統總計</th>
+                    </tr>
+                </thead>
+                <tbody id="resultBody"></tbody>
+            </table>
+        </div>
     </div>
 </div>
 
 <script>
-    const API_URL = "https://script.google.com/macros/s/AKfycbz9kLPJjKS5XZsYmgy_Hk77YKKL7X_8qIJkQrNGyJLEcGb3XKrb0lotAjcNhRCL5EXB/exec"; 
+    const API_URL = "https://script.google.com/macros/s/AKfycbz9kLPJjKS5XZsYmgy_Hk77YKKL7X_8qIJkQrNGyJLEcGb3XKrb0lotAjcNhRCL5EXB/exec";
+    
     let trendChart = null;
+    let currentCalcData = null;
     Chart.register(ChartDataLabels);
 
     window.onload = async () => {
-        const res = await fetch(API_URL);
-        const result = await res.json();
-        const sel = document.getElementById('selEmp');
-        // 確保 data-rank 正確寫入
-        sel.innerHTML = result.data.map(e => `<option value="${e.name}" data-rank="${e.rank}">${e.name} (${e.rank})</option>`).join('');
-        updateUI();
+        try {
+            const res = await fetch(API_URL, { method: "GET", redirect: "follow" });
+            const result = await res.json();
+            if (result.status === "success") {
+                const sel = document.getElementById('selEmp');
+                sel.innerHTML = result.data.map(e => `<option value="${e.name}" data-rank="${e.rank}">${e.name} (${e.rank})</option>`).join('');
+                updateUI();
+            }
+        } catch (err) { console.error("連線錯誤:", err); }
     };
 
-    // 核心連動：切換人員時重構輸入框
     function updateUI() {
         const sel = document.getElementById('selEmp');
         const rank = sel.options[sel.selectedIndex].dataset.rank;
+        const empName = sel.value;
         
-        // 1. 重構績效分數 (L1=12, L2-4=4)
+        document.getElementById('trendTitle').innerText = `1. 績效與專案評分 - ${empName} (${rank})`;
+
+        // 1. 績效連動
         const sBox = document.getElementById('scoreInputs');
-        let sCount = (rank === 'L1') ? 12 : 4;
-        document.getElementById('scoreTitle').innerText = (rank === 'L1') ? "績效評分 (每月)" : "績效評分 (每季)";
+        let isL1 = (rank === 'L1');
+        let sCount = isL1 ? 12 : 4;
+        document.getElementById('perfLabel').innerText = isL1 ? "績效分數 (每月)" : "績效分數 (每季)";
         
         let sHtml = '';
         for(let i=1; i<=sCount; i++) {
-            sHtml += `<div><small>${rank==='L1'?i:'Q'+i}</small><br><input type="number" class="q-score" onchange="autoCalc()"></div>`;
+            let label = isL1 ? i+'月' : 'Q'+i;
+            sHtml += `<div style="text-align:center;"><small>${label}</small><br><input type="number" class="q-score" value="" onchange="onInputChanged()"></div>`;
         }
         sBox.innerHTML = sHtml;
 
-        // 2. 重構專案分數 (永遠 12 個月)
+        // 2. 專案連動 (固定12個月)
         const pBox = document.getElementById('projInputs');
         let pHtml = '';
         for(let i=1; i<=12; i++) {
-            pHtml += `<div><small>${i}月</small><br><input type="number" class="p-score" onchange="autoCalc()"></div>`;
+            pHtml += `<div style="text-align:center;"><small>${i}月</small><br><input type="number" class="p-score" value="" onchange="onInputChanged()"></div>`;
         }
         pBox.innerHTML = pHtml;
 
-        autoCalc(); // 初始化清空
-    }
-
-    async function autoCalc() {
+        if (trendChart) trendChart.destroy();
         updateChart();
-        const scores = Array.from(document.querySelectorAll('.q-score')).map(i => i.value === "" ? null : parseFloat(i.value));
-        const projScores = Array.from(document.querySelectorAll('.p-score')).map(i => i.value === "" ? null : parseFloat(i.value));
-        
-        // 只要有任一分數就送出試算
-        if (scores.some(s => s !== null) || projScores.some(s => s !== null)) {
-            const res = await fetch(API_URL, {
-                method: "POST",
-                body: JSON.stringify({
-                    action: "calculateBonus", password: "0000",
-                    empName: document.getElementById('selEmp').value,
-                    scores: scores, projScores: projScores,
-                    year: document.getElementById('calcYear').value
-                })
-            });
-            const r = await res.json();
-            if (r.status === "success") {
-                renderTable(r.data);
-            }
-        }
+        document.getElementById('resultBody').innerHTML = ""; 
     }
 
-    function renderTable(d) {
-        const name = document.getElementById('selEmp').value;
-        const total = d.f1 + d.f2 + d.f3 + d.ye + d.proj;
-        document.getElementById('resultBody').innerHTML = `
-            <tr>
-                <td>${name}</td><td>${d.avgScore}</td><td>${d.avgProjScore}</td>
-                <td><input type="number" class="adjust-input" value="${d.f1}"></td>
-                <td><input type="number" class="adjust-input" value="${d.f2}"></td>
-                <td><input type="number" class="adjust-input" value="${d.f3}"></td>
-                <td><input type="number" class="adjust-input" value="${d.ye}"></td>
-                <td style="color:red; font-weight:bold;">${total.toLocaleString()}</td>
-            </tr>`;
+    function onInputChanged() {
+        updateChart();
+        autoLiveCalc(); 
     }
 
     function updateChart() {
         const scores = Array.from(document.querySelectorAll('.q-score')).map(i => i.value === "" ? null : parseFloat(i.value));
+        const labels = scores.map((_, i) => {
+            const rank = document.getElementById('selEmp').options[document.getElementById('selEmp').selectedIndex].dataset.rank;
+            return rank === 'L1' ? (i+1)+'月' : 'Q'+(i+1);
+        });
+
         const ctx = document.getElementById('trendChart').getContext('2d');
         if (trendChart) trendChart.destroy();
+        
         trendChart = new Chart(ctx, {
             type: 'line',
             data: {
-                labels: scores.map((_, i) => i+1),
-                datasets: [{ label: '績效評分', data: scores, borderColor: '#3498db', pointRadius: 5 }]
+                labels: labels,
+                datasets: [{
+                    label: '績效趨勢',
+                    data: scores,
+                    borderColor: '#3498db',
+                    backgroundColor: 'rgba(52, 152, 219, 0.1)',
+                    fill: true,
+                    tension: 0.3,
+                    pointRadius: 6,
+                    pointBackgroundColor: '#2c3e50'
+                }]
             },
             options: {
+                responsive: true,
                 maintainAspectRatio: false,
-                plugins: { datalabels: { align: 'top', formatter: v => v || '' } }
+                plugins: {
+                    datalabels: {
+                        align: 'top', anchor: 'end', backgroundColor: '#2c3e50', color: 'white', borderRadius: 4, font: { weight: 'bold' },
+                        formatter: v => v === null ? '' : v
+                    },
+                    legend: { display: false }
+                }
             }
         });
     }
 
-    async function handleFinalSave() {
-        const p = prompt("請輸入密碼以正式存檔：");
-        if(p !== "0000") return alert("密碼錯誤");
+    async function autoLiveCalc() {
+        const scores = Array.from(document.querySelectorAll('.q-score')).map(i => i.value === "" ? null : parseFloat(i.value));
+        const projScores = Array.from(document.querySelectorAll('.p-score')).map(i => i.value === "" ? null : parseFloat(i.value));
         
-        // 抓取修改後的實付金額
-        const adjs = Array.from(document.querySelectorAll('.adjust-input')).map(i => parseFloat(i.value) || 0);
         const res = await fetch(API_URL, {
             method: "POST",
             body: JSON.stringify({
-                action: "saveRecord", password: p,
+                action: "calculateBonus",
                 empName: document.getElementById('selEmp').value,
-                year: document.getElementById('calcYear').value,
-                f1: adjs[0], f2: adjs[1], f3: adjs[2], ye: adjs[3], total: adjs.reduce((a,b)=>a+b,0)
+                scores: scores,
+                projScores: projScores,
+                year: document.getElementById('calcYear').value
             })
         });
         const r = await res.json();
-        if(r.status === "success") alert("存檔成功！");
-    }
-
-    function askUnlock() {
-        const p = prompt("請輸入密碼解鎖機密金額：");
-        if(p === "0000") document.getElementById('bonusZone').style.filter = "none";
-    }
-</script>
-</body>
-</html>
+        if(r.status === "success") {
+            currentCalcData = r.data;
+            const d = r.data;
+            document.getElementById('resultBody').innerHTML = `
+                <tr>
+                    <td>${document.getElementById('selEmp').value}</td>
+                    <td>${d.avgScore}</td>
+                    <td>${d.avgProjScore}</td>
+                    <td><input type="number" class="adjust-input" value="${d.f1}"></td>
+                    <td><input type="number" class="adjust-input" value="${d.f2}"></td>
+                    <td><input type="number" class="adjust-input" value="${d.f
