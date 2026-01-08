@@ -2,62 +2,76 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <title>獎金管理系統 - 主管授權完整版</title>
+    <title>獎金管理系統 - 薪資Snapshot與權限隔離版</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
     <style>
         :root { --primary: #2c3e50; --accent: #3498db; --success: #27ae60; --lock: #e74c3c; --bg: #f4f7f6; }
-        body { font-family: "Microsoft JhengHei", sans-serif; background: var(--bg); padding: 20px; }
+        body { font-family: "Microsoft JhengHei", sans-serif; background: var(--bg); padding: 20px; color: var(--primary); }
         .card { background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); margin-bottom: 20px; }
-        .score-container { display: flex; flex-wrap: wrap; gap: 8px; background: #f8f9fa; padding: 15px; border-radius: 10px; margin-bottom: 15px; }
-        .q-score, .p-score { width: 65px; height: 40px; text-align: center; border: 2px solid var(--accent); border-radius: 6px; font-weight: bold; }
-        .btn { padding: 10px 20px; border: none; border-radius: 6px; cursor: pointer; color: white; font-weight: bold; }
-        .adjust-input { width: 100px; color: #d35400; font-weight: bold; border: 2px solid #e67e22; text-align: center; background: #fff5e6; }
+        h2 { border-left: 5px solid var(--accent); padding-left: 10px; margin-top: 0; }
         
-        /* 核心改變：隱藏區塊 */
-        #adminZone { display: none; } /* 預設完全不顯示 */
+        .score-container { display: flex; flex-wrap: wrap; gap: 8px; background: #f8f9fa; padding: 15px; border-radius: 10px; margin-bottom: 15px; }
+        .q-score, .p-score { width: 65px; height: 45px; text-align: center; border: 2px solid var(--accent); border-radius: 8px; font-size: 1.1rem; font-weight: bold; }
+        .p-score { border-color: #e67e22; }
+        
+        .btn { padding: 12px 20px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; color: white; transition: 0.3s; }
+        .btn-green { background: var(--success); }
+        .btn-red { background: var(--lock); }
+        
+        /* 修改框：橘色虛線代表可手動微調 */
+        .adjust-input { width: 100px; padding: 5px; color: #d35400; font-weight: bold; border: 2px dashed #e67e22; text-align: center; background: #fffaf0; border-radius: 4px; }
+        
+        /* 隱密區塊 */
+        #adminZone { display: none; } 
         
         table { width: 100%; border-collapse: collapse; margin-top: 15px; }
         th, td { border: 1px solid #eee; padding: 12px; text-align: center; }
-        .total-cell { background: #fff3cd; color: red; font-weight: bold; font-size: 1.2em; }
+        .total-cell { background: #fff3cd; color: red; font-weight: bold; font-size: 1.2rem; }
+        .salary-snapshot { color: #7f8c8d; font-size: 0.85rem; font-style: italic; }
     </style>
 </head>
 <body oncontextmenu="return false;">
 
-<div class="card">
-    <h2>1. 員工分數輸入 (助理/公開)</h2>
-    <div style="display: flex; gap: 15px; align-items: flex-end; margin-bottom: 15px;">
-        <div>選擇員工：<select id="selEmp" onchange="updateUI()"></select></div>
-        <div>年度：<input type="number" id="calcYear" value="2025" style="width:70px;" onchange="autoCalc()"></div>
-        <button class="btn" style="background:var(--lock);" id="unlockBtn" onclick="askPassword()">🔒 主管解鎖 (核定與歷年趨勢)</button>
-    </div>
-    
-    <label>績效分數：</label>
-    <div id="scoreInputs" class="score-container"></div>
-    <label>專案分數：</label>
-    <div id="projInputs" class="score-container"></div>
-    
-    <div style="height: 250px;"><canvas id="scoreChart"></canvas></div>
-</div>
-
-<div id="adminZone">
+<div class="container">
     <div class="card">
-        <h2>2. 實領獎金核定 (可加減調整)</h2>
-        <p style="color: #666; font-size: 0.9em;">※ 修改下方框內金額，系統總計將即時更新。</p>
-        <table>
-            <thead>
-                <tr><th>姓名</th><th>年度</th><th>平均分數</th><th>五一</th><th>端午</th><th>中秋</th><th>年終</th><th>專案</th><th>總計</th></tr>
-            </thead>
-            <tbody id="resultBody"></tbody>
-        </table>
-        <div style="text-align: right; margin-top: 15px;">
-            <button class="btn" style="background:var(--success); padding: 15px 30px;" onclick="handleFinalSave()">✅ 確認金額並存檔</button>
+        <h2>1. 評分輸入與歷史回溯</h2>
+        <div style="display: flex; gap: 15px; align-items: flex-end; margin-bottom: 20px;">
+            <div>選擇員工：<select id="selEmp" onchange="updateUI()"></select></div>
+            <div>考評年度：<input type="number" id="calcYear" value="2025" style="width:80px;" onchange="autoCalc()"></div>
+            <button class="btn btn-red" id="unlockBtn" onclick="askPassword()">🔒 主管解鎖 (核定與趨勢圖)</button>
         </div>
+        
+        <label><strong>績效評分 (12月/4季)：</strong></label>
+        <div id="scoreInputs" class="score-container"></div>
+
+        <label><strong>專案評分 (12個月加權)：</strong></label>
+        <div id="projInputs" class="score-container"></div>
+
+        <div style="height: 300px;"><canvas id="scoreChart"></canvas></div>
     </div>
 
-    <div class="card">
-        <h2>3. 個人歷年實領趨勢 (2023-2025)</h2>
-        <div style="height: 300px;"><canvas id="yearTrendChart"></canvas></div>
+    <div id="adminZone">
+        <div class="card">
+            <h2>2. 獎金核定 (實領金額手動微調)</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>姓名</th><th>年度</th><th>基準月薪</th><th>平均分</th>
+                        <th>五一</th><th>端午</th><th>中秋</th><th>年終</th><th>總計</th>
+                    </tr>
+                </thead>
+                <tbody id="resultBody"></tbody>
+            </table>
+            <div style="text-align: right; margin-top: 15px;">
+                <button class="btn btn-green" style="padding: 15px 30px;" onclick="handleFinalSave()">✅ 確認金額並正式存檔</button>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>3. 個人歷年實領總額趨勢</h2>
+            <div style="height: 300px;"><canvas id="yearTrendChart"></canvas></div>
+        </div>
     </div>
 </div>
 
@@ -70,17 +84,23 @@
         const res = await fetch(API_URL);
         const result = await res.json();
         const sel = document.getElementById('selEmp');
-        sel.innerHTML = result.data.map(e => `<option value="${e.name}" data-rank="${e.rank}">${e.name}</option>`).join('');
+        sel.innerHTML = result.data.map(e => `<option value="${e.name}" data-rank="${e.rank}">${e.name} (${e.rank})</option>`).join('');
         updateUI();
     };
 
     function updateUI() {
         const sel = document.getElementById('selEmp');
         const rank = sel.options[sel.selectedIndex].dataset.rank;
+        
+        // 績效框連動
         document.getElementById('scoreInputs').innerHTML = Array.from({length: (rank === 'L1' ? 12 : 4)}, (_, i) => 
             `<div><small>${rank==='L1'?(i+1)+'M':'Q'+(i+1)}</small><br><input type="number" class="q-score" onchange="onChanged()"></div>`).join('');
+        
+        // 專案框固定 12 個月
         document.getElementById('projInputs').innerHTML = Array.from({length: 12}, (_, i) => 
             `<div><small>${i+1}M</small><br><input type="number" class="p-score" onchange="onChanged()"></div>`).join('');
+        
+        if (scoreChart) scoreChart.destroy();
         autoCalc();
     }
 
@@ -89,13 +109,15 @@
     async function autoCalc() {
         const scores = Array.from(document.querySelectorAll('.q-score')).map(i => i.value===""?null:parseFloat(i.value));
         const projScores = Array.from(document.querySelectorAll('.p-score')).map(i => i.value===""?null:parseFloat(i.value));
+        
         const res = await fetch(API_URL, {
             method: "POST",
             body: JSON.stringify({ action: "calculateBonus", empName: document.getElementById('selEmp').value, scores, projScores, year: document.getElementById('calcYear').value })
         });
         const r = await res.json();
+        
         if(r.status === "success") {
-            // 歷史回填
+            // 歷史分數回填邏輯
             if(r.historyScores) {
                 const hist = JSON.parse(r.historyScores);
                 const qIn = document.querySelectorAll('.q-score'), pIn = document.querySelectorAll('.p-score');
@@ -113,23 +135,20 @@
             <tr>
                 <td>${document.getElementById('selEmp').value}</td>
                 <td>${document.getElementById('calcYear').value}</td>
+                <td class="salary-snapshot">$${d.salary.toLocaleString()}</td>
                 <td>${d.avgScore}</td>
                 <td><input type="number" class="adjust-input" id="adj_f1" value="${d.f1}" oninput="refreshTotal()"></td>
                 <td><input type="number" class="adjust-input" id="adj_f2" value="${d.f2}" oninput="refreshTotal()"></td>
                 <td><input type="number" class="adjust-input" id="adj_f3" value="${d.f3}" oninput="refreshTotal()"></td>
                 <td><input type="number" class="adjust-input" id="adj_ye" value="${d.ye}" oninput="refreshTotal()"></td>
-                <td id="cellProj">${d.proj.toLocaleString()}</td>
-                <td class="total-cell" id="cellTotal">${d.systemTotal.toLocaleString()}</td>
+                <td class="total-cell" id="cellTotal">${(d.systemTotal).toLocaleString()}</td>
             </tr>`;
     }
 
     function refreshTotal() {
-        const f1 = parseFloat(document.getElementById('adj_f1').value) || 0;
-        const f2 = parseFloat(document.getElementById('adj_f2').value) || 0;
-        const f3 = parseFloat(document.getElementById('adj_f3').value) || 0;
-        const ye = parseFloat(document.getElementById('adj_ye').value) || 0;
-        const proj = parseFloat(document.getElementById('cellProj').innerText.replace(/,/g,'')) || 0;
-        document.getElementById('cellTotal').innerText = (f1 + f2 + f3 + ye + proj).toLocaleString();
+        const adjs = [document.getElementById('adj_f1'), document.getElementById('adj_f2'), document.getElementById('adj_f3'), document.getElementById('adj_ye')];
+        const sum = adjs.reduce((a, b) => a + (parseFloat(b.value) || 0), 0);
+        document.getElementById('cellTotal').innerText = sum.toLocaleString();
     }
 
     async function askPassword() {
@@ -139,7 +158,7 @@
         if(r.status === "success") {
             document.getElementById('adminZone').style.display = 'block';
             document.getElementById('unlockBtn').style.display = 'none';
-            loadYearTrend(); // 解鎖後加載歷年圖
+            loadYearTrend();
         } else alert("密碼錯誤");
     }
 
@@ -162,22 +181,20 @@
         const scores = Array.from(document.querySelectorAll('.q-score')).map(i => i.value);
         const projScores = Array.from(document.querySelectorAll('.p-score')).map(i => i.value);
         const adjs = [document.getElementById('adj_f1').value, document.getElementById('adj_f2').value, document.getElementById('adj_f3').value, document.getElementById('adj_ye').value];
+        
         const res = await fetch(API_URL, {
             method: "POST",
             body: JSON.stringify({
                 action: "saveRecord", 
                 year: document.getElementById('calcYear').value, empName: document.getElementById('selEmp').value,
                 rank: document.getElementById('selEmp').options[document.getElementById('selEmp').selectedIndex].dataset.rank,
-                avgScore: document.querySelector('#resultBody td:nth-child(3)').innerText,
+                avgScore: document.querySelector('#resultBody td:nth-child(4)').innerText,
                 f1: adjs[0], f2: adjs[1], f3: adjs[2], ye: adjs[3], 
                 total: parseFloat(document.getElementById('cellTotal').innerText.replace(/,/g,'')),
                 scores, projScores
             })
         });
-        if((await res.json()).status === "success") {
-            alert("✅ 存檔成功！");
-            loadYearTrend();
-        }
+        if((await res.json()).status === "success") alert("✅ 薪資Snapshot與金額已成功存檔！");
     }
 
     function updateScoreChart() {
@@ -186,7 +203,7 @@
         if (scoreChart) scoreChart.destroy();
         scoreChart = new Chart(ctx, {
             type: 'line',
-            data: { labels: scores.map((_,i)=>i+1), datasets: [{ label: '年度績效評分', data: scores, borderColor: '#3498db' }] },
+            data: { labels: scores.map((_,i)=>i+1), datasets: [{ label: '當前年度績效', data: scores, borderColor: '#3498db', tension: 0.3 }] },
             options: { maintainAspectRatio: false }
         });
     }
