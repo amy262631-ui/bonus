@@ -2,107 +2,74 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>獎金管理系統 - 手動微調強化版</title>
+    <title>獎金管理系統 - 預算彈性化最終版</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
     <style>
-        :root { --primary: #2c3e50; --accent: #3498db; --success: #27ae60; --lock: #e74c3c; --bg: #f4f7f6; }
-        body { font-family: "Microsoft JhengHei", sans-serif; background: var(--bg); margin: 0; padding: 20px; color: var(--primary); }
+        :root { --primary: #2c3e50; --accent: #3498db; --success: #27ae60; --bg: #f4f7f6; }
+        body { font-family: "Microsoft JhengHei", sans-serif; background: var(--bg); padding: 20px; }
         .card { background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); margin-bottom: 20px; }
-        h2 { border-left: 5px solid var(--accent); padding-left: 10px; margin-top: 0; }
-        
-        .input-row { display: flex; flex-wrap: wrap; gap: 15px; align-items: flex-end; margin-bottom: 20px; }
-        .input-group { display: flex; flex-direction: column; }
-        input, select { padding: 10px; border: 1px solid #ccc; border-radius: 5px; font-size: 1rem; }
-        
-        .score-container { display: flex; flex-wrap: wrap; gap: 10px; background: #f8f9fa; padding: 15px; border-radius: 10px; border: 1px solid #dee2e6; margin-bottom: 15px; }
-        .q-score { width: 70px; height: 45px; font-size: 1.1rem; text-align: center; border: 2px solid var(--accent); border-radius: 8px; }
-        .p-score { width: 70px; height: 45px; font-size: 1.1rem; text-align: center; border: 2px solid #e67e22; border-radius: 8px; }
-        
-        .btn { padding: 12px 20px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; transition: 0.3s; }
-        .btn-blue { background: var(--accent); color: white; }
+        .score-container { display: flex; flex-wrap: wrap; gap: 8px; background: #f8f9fa; padding: 15px; border-radius: 10px; margin-bottom: 15px; }
+        .q-score, .p-score { width: 65px; height: 45px; text-align: center; border: 2px solid var(--accent); border-radius: 8px; font-size: 1.1rem; }
+        .p-score { border-color: #e67e22; }
+        .btn { padding: 12px 20px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; }
         .btn-green { background: var(--success); color: white; }
-        .btn-red { background: var(--lock); color: white; }
-        
-        .secret-data { filter: blur(10px); pointer-events: none; transition: 0.5s; }
-        .unlocked .secret-data { filter: none; pointer-events: auto; }
-        table { width: 100%; border-collapse: collapse; margin-top: 20px; background: white; }
+        .adjust-input { width: 100px; color: var(--success); font-weight: bold; border: 2px dashed var(--success); text-align: center; border-radius: 4px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
         th, td { border: 1px solid #eee; padding: 12px; text-align: center; }
-        
-        /* 修改框樣式：更明顯 */
-        .adjust-input { width: 100px; padding: 5px; color: var(--success); font-weight: bold; border: 2px dashed var(--success); text-align: center; border-radius: 4px; font-size: 1rem; }
-        .adjust-input:focus { background: #eaffea; border-style: solid; outline: none; }
-        
-        #chartArea { height: 350px; margin-top: 20px; }
-        .section-label { display: block; margin-bottom: 10px; font-weight: bold; color: var(--primary); }
+        .total-cell { background: #fff3cd; color: red; font-weight: bold; font-size: 1.2rem; }
     </style>
 </head>
 <body>
 
-<div class="container">
-    <div class="card">
-        <h2 id="trendTitle">1. 分數輸入 (助理)</h2>
-        <div class="input-row">
-            <div class="input-group">
-                <label>選擇員工</label>
-                <select id="selEmp" onchange="updateUI()"></select>
-            </div>
-            <div class="input-group">
-                <label>考評年度</label>
-                <input type="number" id="calcYear" value="2025">
-            </div>
-            <button class="btn btn-green" onclick="handleFinalSave()">✅ 確認金額並存檔</button>
-            <button class="btn" style="background: #95a5a6; color: white;" onclick="downloadChartJPG()">下載趨勢 JPG</button>
-        </div>
-        
-        <span class="section-label" id="perfLabel">績效分數</span>
-        <div id="scoreInputs" class="score-container"></div>
-
-        <span class="section-label">專案分數 (12個月)</span>
-        <div id="projInputs" class="score-container"></div>
-
-        <div id="chartArea"><canvas id="trendChart"></canvas></div>
+<div class="card">
+    <h2>1. 分數輸入 (12月專案加權)</h2>
+    <div style="display: flex; gap: 15px; align-items: flex-end; margin-bottom: 20px;">
+        <div>選擇員工：<select id="selEmp" onchange="updateUI()"></select></div>
+        <div>年度：<input type="number" id="calcYear" value="2025" style="width:80px;"></div>
+        <button class="btn btn-green" onclick="handleFinalSave()">✅ 確認金額並存檔</button>
     </div>
 
-    <div class="card" id="bonusZone">
-        <div style="display: flex; justify-content: space-between; align-items: center;">
-            <h2>2. 獎金核定 (可手動加減)</h2>
-            <button class="btn btn-red" id="unlockBtn" onclick="askPassword()">🔒 解鎖金額修改</button>
-        </div>
-        <div class="secret-data">
-            <table>
-                <thead>
-                    <tr>
-                        <th>姓名</th><th>績效平均</th><th>專案獎金</th>
-                        <th>五一</th><th>端午</th><th>中秋</th><th>年終</th>
-                        <th style="background: #fff3cd;">應付總計</th>
-                    </tr>
-                </thead>
-                <tbody id="resultBody"></tbody>
-            </table>
-            <p style="color: #666; font-size: 0.85rem; margin-top: 10px;">* 綠色虛線框內可直接修改數字，總計將自動重新計算。</p>
-        </div>
+    <label><strong>績效分數：</strong></label>
+    <div id="scoreInputs" class="score-container"></div>
+
+    <label><strong>專案分數 (12個月)：</strong></label>
+    <div id="projInputs" class="score-container"></div>
+    
+    <div style="height: 300px;"><canvas id="trendChart"></canvas></div>
+</div>
+
+<div class="card" id="bonusZone">
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+        <h2>2. 獎金核定 (可手動加減)</h2>
+        <button class="btn" style="background:#e74c3c; color:white;" onclick="askUnlock()">🔒 解鎖編輯</button>
+    </div>
+    <div id="secretMask" style="filter: blur(8px); pointer-events: none;">
+        <table>
+            <thead>
+                <tr>
+                    <th>姓名</th><th>績效平均</th><th>專案獎金</th>
+                    <th>五一 (修改)</th><th>端午 (修改)</th><th>中秋 (修改)</th><th>年終 (修改)</th>
+                    <th>應付總計</th>
+                </tr>
+            </thead>
+            <tbody id="resultBody"></tbody>
+        </table>
     </div>
 </div>
 
 <script>
-    const API_URL = "https://script.google.com/macros/s/AKfycbz9kLPJjKS5XZsYmgy_Hk77YKKL7X_8qIJkQrNGyJLEcGb3XKrb0lotAjcNhRCL5EXB/exec";
-    
+    const API_URL = "https://script.google.com/macros/s/AKfycbz9kLPJjKS5XZsYmgy_Hk77YKKL7X_8qIJkQrNGyJLEcGb3XKrb0lotAjcNhRCL5EXB/exec"; 
     let trendChart = null;
     let currentCalcData = null;
     Chart.register(ChartDataLabels);
 
     window.onload = async () => {
-        try {
-            const res = await fetch(API_URL, { method: "GET", redirect: "follow" });
-            const result = await res.json();
-            if (result.status === "success") {
-                const sel = document.getElementById('selEmp');
-                sel.innerHTML = result.data.map(e => `<option value="${e.name}" data-rank="${e.rank}">${e.name} (${e.rank})</option>`).join('');
-                updateUI();
-            }
-        } catch (err) { console.error("API 連線錯誤"); }
+        const res = await fetch(API_URL);
+        const result = await res.json();
+        const sel = document.getElementById('selEmp');
+        sel.innerHTML = result.data.map(e => `<option value="${e.name}" data-rank="${e.rank}">${e.name} (${e.rank})</option>`).join('');
+        updateUI();
     };
 
     function updateUI() {
@@ -111,127 +78,93 @@
         const sBox = document.getElementById('scoreInputs');
         const pBox = document.getElementById('projInputs');
         
-        let isL1 = (rank === 'L1');
-        document.getElementById('perfLabel').innerText = isL1 ? "績效分數 (每月)" : "績效分數 (每季)";
+        let sCount = (rank === 'L1') ? 12 : 4;
+        sBox.innerHTML = Array.from({length: sCount}, (_, i) => `<div><small>${rank==='L1'?(i+1)+'月':'Q'+(i+1)}</small><br><input type="number" class="q-score" onchange="onChanged()"></div>`).join('');
+        pBox.innerHTML = Array.from({length: 12}, (_, i) => `<div><small>${i+1}月</small><br><input type="number" class="p-score" onchange="onChanged()"></div>`).join('');
         
-        // 生成績效框
-        let sHtml = '';
-        for(let i=1; i<=(isL1?12:4); i++) {
-            sHtml += `<div style="text-align:center;"><small>${isL1?i+'月':'Q'+i}</small><br><input type="number" class="q-score" onchange="onInputChanged()"></div>`;
-        }
-        sBox.innerHTML = sHtml;
-
-        // 生成專案框
-        let pHtml = '';
-        for(let i=1; i<=12; i++) {
-            pHtml += `<div style="text-align:center;"><small>${i}月</small><br><input type="number" class="p-score" onchange="onInputChanged()"></div>`;
-        }
-        pBox.innerHTML = pHtml;
-
         if (trendChart) trendChart.destroy();
+        document.getElementById('resultBody').innerHTML = "";
+    }
+
+    function onChanged() {
         updateChart();
-        document.getElementById('resultBody').innerHTML = ""; 
+        autoCalc();
     }
 
-    function onInputChanged() {
-        updateChart();
-        autoLiveCalc(); 
-    }
-
-    // 計算總計的函式
-    function refreshTotal() {
-        const adjs = Array.from(document.querySelectorAll('.adjust-input')).map(i => parseFloat(i.value) || 0);
-        const projBonus = parseFloat(document.getElementById('displayProjBonus').innerText.replace(/,/g, '')) || 0;
-        const newTotal = adjs.reduce((a, b) => a + b, 0) + projBonus;
-        document.getElementById('displayTotal').innerText = newTotal.toLocaleString();
-    }
-
-    async function autoLiveCalc() {
-        const scores = Array.from(document.querySelectorAll('.q-score')).map(i => i.value === "" ? null : parseFloat(i.value));
-        const projScores = Array.from(document.querySelectorAll('.p-score')).map(i => i.value === "" ? null : parseFloat(i.value));
+    async function autoCalc() {
+        const scores = Array.from(document.querySelectorAll('.q-score')).map(i => i.value===""?null:parseFloat(i.value));
+        const projScores = Array.from(document.querySelectorAll('.p-score')).map(i => i.value===""?null:parseFloat(i.value));
         
         const res = await fetch(API_URL, {
             method: "POST",
             body: JSON.stringify({
                 action: "calculateBonus",
                 empName: document.getElementById('selEmp').value,
-                scores: scores,
-                projScores: projScores,
+                scores: scores, projScores: projScores,
                 year: document.getElementById('calcYear').value
             })
         });
         const r = await res.json();
         if(r.status === "success") {
             currentCalcData = r.data;
-            const d = r.data;
-            document.getElementById('resultBody').innerHTML = `
-                <tr>
-                    <td>${document.getElementById('selEmp').value}</td>
-                    <td>${d.avgScore}</td>
-                    <td id="displayProjBonus">${d.proj.toLocaleString()}</td>
-                    <td><input type="number" class="adjust-input" value="${d.f1}" oninput="refreshTotal()"></td>
-                    <td><input type="number" class="adjust-input" value="${d.f2}" oninput="refreshTotal()"></td>
-                    <td><input type="number" class="adjust-input" value="${d.f3}" oninput="refreshTotal()"></td>
-                    <td><input type="number" class="adjust-input" value="${d.ye}" oninput="refreshTotal()"></td>
-                    <td style="color:red; font-weight:bold; font-size:1.2rem; background:#fff3cd;" id="displayTotal">${d.systemTotal.toLocaleString()}</td>
-                </tr>
-            `;
+            renderTable(r.data);
         }
     }
 
-    async function handleFinalSave() {
-        if (!currentCalcData) return alert("請先填寫分數！");
-        
-        // 抓取「目前畫面上」修改後的金額
-        const adjs = Array.from(document.querySelectorAll('.adjust-input')).map(i => parseFloat(i.value) || 0);
-        const finalTotal = parseFloat(document.getElementById('displayTotal').innerText.replace(/,/g, ''));
-        const name = document.getElementById('selEmp').value;
-        const rank = document.getElementById('selEmp').options[document.getElementById('selEmp').selectedIndex].dataset.rank;
+    function renderTable(d) {
+        document.getElementById('resultBody').innerHTML = `
+            <tr>
+                <td>${document.getElementById('selEmp').value}</td>
+                <td>${d.avgScore}</td>
+                <td id="cellProj">${d.proj.toLocaleString()}</td>
+                <td><input type="number" class="adjust-input" value="${d.f1}" oninput="refreshTotal()"></td>
+                <td><input type="number" class="adjust-input" value="${d.f2}" oninput="refreshTotal()"></td>
+                <td><input type="number" class="adjust-input" value="${d.f3}" oninput="refreshTotal()"></td>
+                <td><input type="number" class="adjust-input" value="${d.ye}" oninput="refreshTotal()"></td>
+                <td class="total-cell" id="cellTotal">${d.systemTotal.toLocaleString()}</td>
+            </tr>`;
+    }
 
+    function refreshTotal() {
+        const adjs = Array.from(document.querySelectorAll('.adjust-input')).map(i => parseFloat(i.value) || 0);
+        const proj = parseFloat(document.getElementById('cellProj').innerText.replace(/,/g,'')) || 0;
+        document.getElementById('cellTotal').innerText = (adjs.reduce((a,b)=>a+b,0) + proj).toLocaleString();
+    }
+
+    async function handleFinalSave() {
+        if(!currentCalcData) return alert("請先輸入分數");
+        const adjs = Array.from(document.querySelectorAll('.adjust-input')).map(i => parseFloat(i.value) || 0);
+        const finalTotal = parseFloat(document.getElementById('cellTotal').innerText.replace(/,/g,''));
+        
         const res = await fetch(API_URL, {
             method: "POST",
             body: JSON.stringify({
                 action: "saveRecord",
                 year: document.getElementById('calcYear').value,
-                empName: name, rank: rank, avgScore: currentCalcData.avgScore,
+                empName: document.getElementById('selEmp').value,
+                rank: currentCalcData.rank, avgScore: currentCalcData.avgScore,
                 f1: adjs[0], f2: adjs[1], f3: adjs[2], ye: adjs[3], total: finalTotal
             })
         });
-        const r = await res.json();
-        if(r.status === "success") alert("✅ 資料已成功存檔！");
+        if((await res.json()).status === "success") alert("✅ 已成功存檔！");
     }
 
-    function askPassword() {
-        if(prompt("主管解鎖密碼：") === "0000") {
-            document.getElementById('bonusZone').classList.add('unlocked');
-            document.getElementById('unlockBtn').innerText = "🔓 已解鎖 (可編輯)";
-        }
+    function askUnlock() {
+        if(prompt("主管密碼：") === "0000") document.getElementById('secretMask').style.filter = "none";
     }
 
     function updateChart() {
-        const scores = Array.from(document.querySelectorAll('.q-score')).map(i => i.value === "" ? null : parseFloat(i.value));
-        const labels = scores.map((_, i) => {
-            const rank = document.getElementById('selEmp').options[document.getElementById('selEmp').selectedIndex].dataset.rank;
-            return rank === 'L1' ? (i+1)+'月' : 'Q'+(i+1);
-        });
+        const scores = Array.from(document.querySelectorAll('.q-score')).map(i => i.value===""?null:parseFloat(i.value));
         const ctx = document.getElementById('trendChart').getContext('2d');
         if (trendChart) trendChart.destroy();
         trendChart = new Chart(ctx, {
             type: 'line',
             data: {
-                labels: labels,
+                labels: scores.map((_, i) => i+1),
                 datasets: [{ label: '績效', data: scores, borderColor: '#3498db', pointRadius: 6 }]
             },
-            options: { responsive: true, maintainAspectRatio: false }
+            options: { plugins: { datalabels: { align: 'top', formatter: v => v || '' } } }
         });
-    }
-
-    function downloadChartJPG() {
-        const canvas = document.getElementById('trendChart');
-        const link = document.createElement('a');
-        link.download = `績效_${document.getElementById('selEmp').value}.jpg`;
-        link.href = canvas.toDataURL('image/jpeg', 1.0);
-        link.click();
     }
 </script>
 </body>
