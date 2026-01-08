@@ -2,201 +2,141 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>員工績效與獎金管理系統</title>
+    <title>獎金管理系統 - 簡報優化版</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
     <style>
-        :root { --primary: #2c3e50; --bg: #f4f7f6; --accent: #3498db; --lock: #e74c3c; }
-        body { font-family: "Microsoft JhengHei", sans-serif; background: var(--bg); margin: 0; padding: 20px; }
-        .card { background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); margin-bottom: 20px; }
-        h2 { color: var(--primary); border-left: 5px solid var(--accent); padding-left: 10px; margin-top: 0; }
-        .input-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px; }
-        .score-box { background: #f8f9fa; padding: 15px; border-radius: 8px; border: 1px solid #dee2e6; }
-        input, select { width: 100%; padding: 10px; margin-top: 5px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
-        .btn { padding: 12px 20px; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; transition: 0.3s; }
+        :root { --accent: #3498db; --lock: #e74c3c; --bg: #f4f7f6; }
+        body { font-family: sans-serif; background: var(--bg); padding: 20px; }
+        .card { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); margin-bottom: 20px; }
+        .q-score { width: 70px; height: 45px; font-size: 1.2rem; text-align: center; border: 2px solid var(--accent); border-radius: 5px; }
+        .btn { padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; }
         .btn-blue { background: var(--accent); color: white; }
         .btn-red { background: var(--lock); color: white; }
-        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-        th, td { border: 1px solid #eee; padding: 12px; text-align: center; }
-        th { background: #f2f2f2; }
-        .secret-data { filter: blur(5px); pointer-events: none; user-select: none; }
+        .secret-data { filter: blur(6px); pointer-events: none; }
         .unlocked .secret-data { filter: none; pointer-events: auto; }
-        #chartArea { height: 350px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+        th, td { border: 1px solid #ddd; padding: 10px; text-align: center; }
+        .adjust-input { width: 85px; margin-top: 5px; color: #27ae60; font-weight: bold; border: 1px dashed #27ae60; }
     </style>
 </head>
 <body>
 
-<div class="container">
-    <div class="card">
-        <h2>1. 員工績效分數輸入 (人資助理用)</h2>
-        <div class="input-grid">
-            <div>
-                <label>選擇員工</label>
-                <select id="selEmp" onchange="loadEmployeeTrend()"></select>
-            </div>
-            <div>
-                <label>考評年度</label>
-                <input type="number" id="calcYear" value="2025">
-            </div>
-            <div>
-                <label>專案表現分數</label>
-                <input type="number" id="projScore" placeholder="0-100">
-            </div>
-        </div>
-        
-        <div id="scoreInputs" class="score-box">
-            </div>
-        
-        <div style="margin-top: 15px; text-align: right;">
-            <button class="btn btn-blue" onclick="startCalc()">執行計算</button>
-        </div>
+<div class="card">
+    <h2 id="trendTitle">1. 分數輸入與分析</h2>
+    <div style="display: flex; gap: 20px; align-items: flex-end; margin-bottom: 15px;">
+        <div>選擇員工：<select id="selEmp" onchange="updateScoreUI()"></select></div>
+        <div>年度：<input type="number" id="calcYear" value="2025" style="width: 80px;"></div>
+        <div>專案分數：<input type="number" id="projScore" style="width: 60px;"></div>
+        <button class="btn btn-blue" onclick="startCalc()">計算獎金</button>
+        <button class="btn" onclick="downloadChart()">下載圖表 JPG</button>
     </div>
+    <div id="scoreInputs"></div>
+    <div style="height: 300px; margin-top: 20px;"><canvas id="trendChart"></canvas></div>
+</div>
 
-    <div class="card">
-        <h2>2. 員工得分趨勢分析</h2>
-        <div id="chartArea">
-            <canvas id="trendChart"></canvas>
-        </div>
+<div class="card" id="bonusZone">
+    <div style="display: flex; justify-content: space-between;">
+        <h2>2. 獎金核定 (主管專用)</h2>
+        <button class="btn btn-red" onclick="askPassword()">🔒 解鎖金額</button>
     </div>
-
-    <div class="card" id="bonusZone">
-        <div style="display: flex; justify-content: space-between; align-items: center;">
-            <h2>3. 獎金試算結果</h2>
-            <button class="btn btn-red" id="unlockBtn" onclick="askPassword()">🔒 輸入密碼查看金額</button>
-        </div>
-        
-        <div class="secret-data">
-            <table id="resultTable">
-                <thead>
-                    <tr>
-                        <th>姓名</th><th>年度平均分</th><th>五一</th><th>端午</th><th>中秋</th><th>年終</th><th>總計</th><th>實付修改</th><th class="no-print">操作</th>
-                    </tr>
-                </thead>
-                <tbody id="resultBody"></tbody>
-            </table>
-        </div>
+    <div class="secret-data">
+        <table>
+            <thead><tr><th>姓名</th><th>平均</th><th>五一 (修改)</th><th>端午 (修改)</th><th>中秋 (修改)</th><th>年終 (修改)</th><th>總計</th><th>操作</th></tr></thead>
+            <tbody id="resultBody"></tbody>
+        </table>
     </div>
 </div>
 
 <script>
-    const API_URL = "https://script.google.com/macros/s/AKfycbz9kLPJjKS5XZsYmgy_Hk77YKKL7X_8qIJkQrNGyJLEcGb3XKrb0lotAjcNhRCL5EXB/exec"; // 👈 請填入你的 Apps Script 網址
-    let currentAdminPwd = "";
+    const API_URL = "你的API網址"; // 👈 修改此處
     let trendChart = null;
-    let empDataCache = [];
+    let currentPwd = "";
+    Chart.register(ChartDataLabels);
 
     window.onload = async () => {
-    try {
-        // 直接對 API 網址發送 GET 請求，這會觸發後端的 doGet
-        const res = await fetch(API_URL, {
-            method: "GET",
-            redirect: "follow"
-        });
+        const res = await fetch(API_URL);
         const result = await res.json();
-        
-        if (result.status === "success") {
-            empDataCache = result.data;
-            const sel = document.getElementById('selEmp');
-            // 填入下拉選單
-            sel.innerHTML = empDataCache.map(e => 
-                `<option value="${e.name}" data-rank="${e.rank}">${e.name} (${e.rank})</option>`
-            ).join('');
-            updateScoreUI();
-        }
-    } catch (err) {
-        console.error("載入名單失敗:", err);
-    }
-};
+        const sel = document.getElementById('selEmp');
+        sel.innerHTML = result.data.map(e => `<option value="${e.name}" data-rank="${e.rank}">${e.name} (${e.rank})</option>`).join('');
+        updateScoreUI();
+    };
 
     function updateScoreUI() {
         const sel = document.getElementById('selEmp');
         const rank = sel.options[sel.selectedIndex].dataset.rank;
         const box = document.getElementById('scoreInputs');
-        let type = (rank === 'L1') ? '月份' : '季度';
-        let count = (rank === 'L1') ? 12 : 4;
+        document.getElementById('trendTitle').innerText = `1. 分數輸入與分析 - ${sel.value}`;
         
-        let html = `<strong>${type}評分：</strong><br><div style="display:flex; flex-wrap:wrap; gap:5px; margin-top:10px;">`;
+        let count = (rank === 'L1') ? 12 : 4;
+        let html = '<div style="display:flex; flex-wrap:wrap; gap:10px;">';
         for(let i=1; i<=count; i++) {
-            html += `<div style="text-align:center;"><small>${i}${type === '月份' ? '月':'季'}</small><br><input type="number" class="q-score" style="width:50px;" onchange="updateChart()"></div>`;
+            html += `<div><small>${i}${rank==='L1'?'月':'季'}</small><br><input type="number" class="q-score" value="" onchange="updateChart()"></div>`;
         }
-        html += `</div>`;
-        box.innerHTML = html;
+        box.innerHTML = html + '</div>';
         updateChart();
     }
 
-    // 曲線圖邏輯
     function updateChart() {
-        const scores = Array.from(document.querySelectorAll('.q-score')).map(i => parseFloat(i.value) || 0);
-        const labels = Array.from(document.querySelectorAll('.q-score')).map((_, i) => `${i+1}`);
-        
+        const scores = Array.from(document.querySelectorAll('.q-score')).map(i => i.value==="" ? null : parseFloat(i.value));
         const ctx = document.getElementById('trendChart').getContext('2d');
         if (trendChart) trendChart.destroy();
         trendChart = new Chart(ctx, {
             type: 'line',
             data: {
-                labels: labels,
-                datasets: [{
-                    label: '個人評分趨勢',
-                    data: scores,
-                    borderColor: '#3498db',
-                    backgroundColor: 'rgba(52, 152, 219, 0.1)',
-                    fill: true,
-                    tension: 0.4,
-                    pointRadius: 5
-                }]
+                labels: scores.map((_, i) => i+1),
+                datasets: [{ label: '得分', data: scores, borderColor: '#3498db', tension: 0.3, pointRadius: 6 }]
             },
-            options: { responsive: true, maintainAspectRatio: false }
+            options: {
+                plugins: { datalabels: { align: 'top', anchor: 'end', formatter: v => v } }
+            }
         });
-    }
-
-    // 解鎖密碼
-    function askPassword() {
-        const pwd = prompt("請輸入高階主管管理密碼：");
-        if (pwd) {
-            currentAdminPwd = pwd;
-            document.getElementById('bonusZone').classList.add('unlocked');
-            document.getElementById('unlockBtn').innerText = "🔓 已授權檢視金額";
-            document.getElementById('unlockBtn').classList.replace('btn-red', 'btn-blue');
-        }
     }
 
     async function startCalc() {
-        const name = document.getElementById('selEmp').value;
         const scores = Array.from(document.querySelectorAll('.q-score')).map(i => parseFloat(i.value) || 0);
-        const proj = document.getElementById('projScore').value;
-        const year = document.getElementById('calcYear').value;
-
-        // 向後端請求計算 (此處需帶密碼，若沒解鎖會報錯)
         const res = await fetch(API_URL, {
             method: "POST",
-            body: JSON.stringify({
-                action: "calculateBonus",
-                password: currentAdminPwd,
-                empName: name,
-                scores: scores,
-                projScore: proj,
-                year: year
-            })
+            body: JSON.stringify({ action: "calculateBonus", password: currentPwd, empName: document.getElementById('selEmp').value, 
+            scores: scores, projScore: document.getElementById('projScore').value, year: document.getElementById('calcYear').value })
         });
-        const result = await res.json();
-        
-        if(result.status === "success") {
-            const d = result.data;
+        const r = await res.json();
+        if(r.status === "success") {
+            const d = r.data;
             document.getElementById('resultBody').innerHTML += `
-                <tr>
-                    <td>${name}</td>
-                    <td>${d.avgScore}</td>
-                    <td>${d.laborDay}</td>
-                    <td>${d.dragonBoat}</td>
-                    <td>${d.midAutumn}</td>
-                    <td>${d.yearEnd}</td>
-                    <td style="font-weight:bold; color:red;">${d.systemTotal}</td>
-                    <td><input type="number" value="${d.systemTotal}"></td>
-                    <td><button onclick="this.closest('tr').remove()">刪除</button></td>
-                </tr>
-            `;
-        } else {
-            alert("計算失敗：" + result.msg + " (可能尚未解鎖或權限不足)");
-        }
+                <tr><td>${document.getElementById('selEmp').value}</td><td>${d.avgScore}</td>
+                <td>${d.f1}<br><input type="number" class="adjust-input" value="${d.f1}"></td>
+                <td>${d.f2}<br><input type="number" class="adjust-input" value="${d.f2}"></td>
+                <td>${d.f3}<br><input type="number" class="adjust-input" value="${d.f3}"></td>
+                <td>${d.ye}<br><input type="number" class="adjust-input" value="${d.ye}"></td>
+                <td style="color:red; font-weight:bold;">${d.total}</td>
+                <td><button onclick="saveToDB(this, ${d.avgScore})">存檔</button></td></tr>`;
+        } else { alert(r.msg); }
+    }
+
+    function askPassword() {
+        currentPwd = prompt("輸入密碼：");
+        if(currentPwd === "0000") document.getElementById('bonusZone').classList.add('unlocked');
+    }
+
+    async function saveToDB(btn, avg) {
+        const row = btn.closest('tr');
+        const adjs = Array.from(row.querySelectorAll('.adjust-input')).map(i => parseFloat(i.value));
+        const total = adjs.reduce((a,b)=>a+b, 0);
+        const res = await fetch(API_URL, {
+            method: "POST",
+            body: JSON.stringify({ action: "saveRecord", password: currentPwd, empName: row.cells[0].innerText, year: document.getElementById('calcYear').value,
+            rank: "N/A", avgScore: avg, f1: adjs[0], f2: adjs[1], f3: adjs[2], ye: adjs[3], total: total })
+        });
+        const r = await res.json();
+        if(r.status==="success") { btn.innerText = "已存"; btn.disabled = true; }
+    }
+
+    function downloadChart() {
+        const link = document.createElement('a');
+        link.download = `趨勢_${document.getElementById('selEmp').value}.jpg`;
+        link.href = document.getElementById('trendChart').toDataURL('image/jpeg', 1.0);
+        link.click();
     }
 </script>
 </body>
