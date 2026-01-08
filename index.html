@@ -2,7 +2,7 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <title>獎金管理系統 - 分數回填強化版</title>
+    <title>獎金管理系統 - 存檔按鈕修復版</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         :root { --primary: #2c3e50; --accent: #3498db; --success: #27ae60; --lock: #e74c3c; --bg: #f4f7f6; }
@@ -12,10 +12,10 @@
         .q-score { width: 60px; height: 35px; text-align: center; border: 2px solid var(--accent); border-radius: 6px; font-weight: bold; }
         .adjust-input { width: 90px; color: #d35400; font-weight: bold; border: 2px dashed #e67e22; text-align: center; background: #fffaf0; }
         #adminZone { display: none; }
-        .timeline-table { width: 100%; border-collapse: collapse; background: #fffdf0; margin-bottom: 20px; }
-        .timeline-table th, td { border: 1px solid #ddd; padding: 10px; text-align: center; }
+        table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+        th, td { border: 1px solid #ddd; padding: 10px; text-align: center; }
         .total-cell { background: #fff3cd; color: red; font-weight: bold; font-size: 1.2rem; }
-        .btn { padding: 12px 20px; border: none; border-radius: 6px; cursor: pointer; color: white; font-weight: bold; }
+        .btn { padding: 12px 20px; border: none; border-radius: 6px; cursor: pointer; color: white; font-weight: bold; transition: 0.3s; }
     </style>
 </head>
 <body>
@@ -24,8 +24,8 @@
     <h2>1. 績效評分輸入</h2>
     <div style="display: flex; gap: 10px; align-items: flex-end; margin-bottom: 15px;">
         員工：<select id="selEmp" onchange="initUI()"></select>
-        年度：<input type="number" id="calcYear" value="2025" style="width:70px;" onchange="autoCalc()">
-        <button class="btn" style="background:var(--lock);" id="unlockBtn" onclick="askPassword()">🔒 主管解鎖/變動設定</button>
+        年度：<input type="number" id="calcYear" value="2025" style="width:75px;" onchange="autoCalc()">
+        <button class="btn" style="background:var(--lock);" id="unlockBtn" onclick="askPassword()">🔒 主管解鎖/晉升設定</button>
     </div>
     <div id="scoreInputs" class="score-container"></div>
     <div style="height: 200px; margin-top:10px;"><canvas id="scoreChart"></canvas></div>
@@ -34,7 +34,7 @@
 <div id="adminZone">
     <div class="card">
         <h2 style="color:#e67e22">2. 年度異動 Snapshot (晉升/調薪設定)</h2>
-        <table class="timeline-table">
+        <table style="background:#fffdf0;">
             <thead><tr><th>季度</th><th>Q1 (五一)</th><th>Q2 (端午)</th><th>Q3 (中秋)</th><th>Q4 (年終)</th></tr></thead>
             <tbody id="timelineBody"></tbody>
         </table>
@@ -43,13 +43,15 @@
 
     <div class="card">
         <h2>3. 獎金核定結果</h2>
-        <table style="width:100%; border-collapse:collapse;">
+        <table>
             <thead><tr style="background:#eee;"><th>姓名</th><th>年度</th><th>平均分</th><th>五一</th><th>端午</th><th>中秋</th><th>年終</th><th>總計</th></tr></thead>
             <tbody id="resultBody"></tbody>
         </table>
-        <div id="saveBtnArea" style="text-align:right; margin-top:20px;">
+        
+        <div style="text-align:right; margin-top:20px;">
             <button onclick="handleSave()" id="realSaveBtn" class="btn" style="background:var(--success); padding: 15px 40px; font-size: 1.1rem;">✅ 儲存年度紀錄</button>
         </div>
+        
         <div style="height: 250px; margin-top:20px;"><canvas id="yearTrendChart"></canvas></div>
     </div>
 </div>
@@ -72,15 +74,10 @@
         const rank = opt.dataset.rank;
         const salary = parseFloat(opt.dataset.salary);
         
-        // 生成評分框
         document.getElementById('scoreInputs').innerHTML = Array.from({length: (rank==='L1'?12:4)}, (_, i) => 
             `<div><small>${i+1}${rank==='L1'?'M':'Q'}</small><br><input type="number" class="q-score" oninput="updateScoreChart(); autoCalc();"></div>`).join('');
         
-        // 初始化該員當前職等薪資快照
-        timelineData = { 
-            Q1:{r:rank, s:salary}, Q2:{r:rank, s:salary}, 
-            Q3:{r:rank, s:salary}, Q4:{r:rank, s:salary} 
-        };
+        timelineData = { Q1:{r:rank, s:salary}, Q2:{r:rank, s:salary}, Q3:{r:rank, s:salary}, Q4:{r:rank, s:salary} };
         renderTimeline();
         autoCalc();
     }
@@ -89,7 +86,7 @@
         let hRank = "<tr><td>職等</td>", hSalary = "<tr><td>月薪</td>";
         for(let i=1; i<=4; i++) {
             hRank += `<td><select id="t_r_Q${i}" onchange="autoCalc()"><option>L1</option><option>L2</option><option>L3</option><option>L4</option></select></td>`;
-            hSalary += `<td><input type="number" id="t_s_Q${i}" style="width:80px" oninput="autoCalc()"></td>`;
+            hSalary += `<td><input type="number" id="t_s_Q${i}" style="width:85px" oninput="autoCalc()"></td>`;
         }
         document.getElementById('timelineBody').innerHTML = hRank + "</tr>" + hSalary + "</tr>";
         for(let i=1; i<=4; i++) {
@@ -100,39 +97,25 @@
 
     async function autoCalc() {
         const scores = Array.from(document.querySelectorAll('.q-score')).map(i => i.value === "" ? null : parseFloat(i.value));
-        
-        // 抓取畫面上手動修改後的 Timeline
         if(document.getElementById('t_r_Q1')) {
             for(let i=1; i<=4; i++) {
-                timelineData["Q"+i] = { 
-                    r: document.getElementById(`t_r_Q${i}`).value, 
-                    s: parseFloat(document.getElementById(`t_s_Q${i}`).value) || 0 
-                };
+                timelineData["Q"+i] = { r: document.getElementById(`t_r_Q${i}`).value, s: parseFloat(document.getElementById(`t_s_Q${i}`).value) || 0 };
             }
         }
-
         const res = await fetch(API_URL, {
             method: "POST",
             body: JSON.stringify({ action: "calculateBonus", empName: document.getElementById('selEmp').value, year: document.getElementById('calcYear').value, scores, timeline: timelineData })
         });
         const r = await res.json();
-        
         if(r.status === "success") {
-            // --- 分數回填機制 ---
             if(r.historyScores) {
                 const inputs = document.querySelectorAll('.q-score');
-                r.historyScores.forEach((v, i) => {
-                    if (v !== null && inputs[i] && inputs[i].value === "") {
-                        inputs[i].value = v; 
-                    }
-                });
+                r.historyScores.forEach((v, i) => { if (v !== null && inputs[i] && inputs[i].value === "") inputs[i].value = v; });
                 updateScoreChart();
             }
-
             document.getElementById('resultBody').innerHTML = `
                 <tr>
-                    <td>${document.getElementById('selEmp').value}</td>
-                    <td>${document.getElementById('calcYear').value}</td>
+                    <td>${document.getElementById('selEmp').value}</td><td>${document.getElementById('calcYear').value}</td>
                     <td id="avgScoreDisplay">${r.data.avgScore}</td>
                     <td><input type="number" class="adjust-input" id="adj_f1" value="${r.data.f1}" oninput="refreshTotal()"></td>
                     <td><input type="number" class="adjust-input" id="adj_f2" value="${r.data.f2}" oninput="refreshTotal()"></td>
@@ -151,29 +134,18 @@
     async function handleSave() {
         const btn = document.getElementById('realSaveBtn');
         btn.disabled = true; btn.innerText = "儲存中...";
-
         const adjs = ["f1","f2","f3","ye"].map(id => parseFloat(document.getElementById("adj_"+id).value) || 0);
         const scores = Array.from(document.querySelectorAll('.q-score')).map(i => i.value === "" ? null : parseFloat(i.value));
-
         const res = await fetch(API_URL, {
             method: "POST",
             body: JSON.stringify({
-                action: "saveRecord", 
-                year: document.getElementById('calcYear').value, 
-                empName: document.getElementById('selEmp').value,
-                rank: timelineData.Q4.r, 
-                avgScore: document.getElementById('avgScoreDisplay').innerText,
-                f1: adjs[0], f2: adjs[1], f3: adjs[2], ye: adjs[3], 
-                total: adjs.reduce((a,b)=>a+b,0),
-                scores: scores, 
-                timeline: timelineData
+                action: "saveRecord", year: document.getElementById('calcYear').value, empName: document.getElementById('selEmp').value,
+                rank: timelineData.Q4.r, avgScore: document.getElementById('avgScoreDisplay').innerText,
+                f1: adjs[0], f2: adjs[1], f3: adjs[2], ye: adjs[3], total: adjs.reduce((a,b)=>a+b,0),
+                scores: scores, timeline: timelineData
             })
         });
-        const r = await res.json();
-        if(r.status === "success") {
-            alert("✅ 存檔成功！已同步更新數據庫與趨勢圖。");
-            loadTrend();
-        }
+        if((await res.json()).status === "success") { alert("✅ 存檔成功！"); loadTrend(); }
         btn.disabled = false; btn.innerText = "✅ 儲存年度紀錄";
     }
 
