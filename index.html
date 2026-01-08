@@ -2,8 +2,9 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <title>獎金管理系統 - 歷史回溯報表版</title>
+    <title>獎金管理系統 - 歷史記憶報表版</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
     <style>
         :root { --primary: #2c3e50; --accent: #3498db; --success: #27ae60; --lock: #e74c3c; --bg: #f4f7f6; }
         body { font-family: "Microsoft JhengHei", sans-serif; background: var(--bg); padding: 20px; }
@@ -35,12 +36,12 @@
 
 <div class="card" id="bonusZone">
     <div style="display: flex; justify-content: space-between; align-items: center;">
-        <h2>2. 獎金核定報表 (解鎖後顯示全員)</h2>
+        <h2>2. 獎金核定報表 (顯示全員已存檔)</h2>
         <button class="btn" style="background:var(--lock);" id="unlockBtn" onclick="askPassword()">🔒 解鎖編輯 & 讀取全員</button>
     </div>
     <div class="secret-data">
         <table>
-            <thead id="tableHead">
+            <thead>
                 <tr><th>姓名</th><th>年度</th><th>績效平均</th><th>五一</th><th>端午</th><th>中秋</th><th>年終</th><th>總計</th></tr>
             </thead>
             <tbody id="resultBody"></tbody>
@@ -51,6 +52,7 @@
 <script>
     const API_URL = "https://script.google.com/macros/s/AKfycbz9kLPJjKS5XZsYmgy_Hk77YKKL7X_8qIJkQrNGyJLEcGb3XKrb0lotAjcNhRCL5EXB/exec"; 
     let trendChart = null;
+    Chart.register(ChartDataLabels);
 
     window.onload = async () => {
         const res = await fetch(API_URL);
@@ -70,7 +72,7 @@
         pBox.innerHTML = Array.from({length: 12}, (_, i) => `<div><small>${i+1}M</small><br><input type="number" class="p-score" onchange="onChanged()"></div>`).join('');
         
         if (trendChart) trendChart.destroy();
-        autoCalc(); // 切換人時自動抓取
+        autoCalc();
     }
 
     function onChanged() { updateChart(); autoCalc(); }
@@ -90,12 +92,11 @@
                 const hist = JSON.parse(r.historyScores);
                 const qIn = document.querySelectorAll('.q-score');
                 const pIn = document.querySelectorAll('.p-score');
-                // 只有當目前框框是空的時候才回填，避免覆蓋剛打好的
                 hist.s.forEach((v, i) => { if(v && !qIn[i].value) qIn[i].value = v; });
                 hist.p.forEach((v, i) => { if(v && !pIn[i].value) pIn[i].value = v; });
+                updateChart();
             }
             renderSingleRow(r.data);
-            updateChart();
         }
     }
 
@@ -114,12 +115,13 @@
     }
 
     async function askPassword() {
-        const p = prompt("密碼：");
+        const p = prompt("請輸入主管密碼：");
         const res = await fetch(API_URL, { method: "POST", body: JSON.stringify({ action: "verifyPassword", password: p }) });
-        if((await res.json()).status === "success") {
+        const r = await res.json();
+        if(r.status === "success") {
             document.getElementById('bonusZone').classList.add('unlocked');
-            loadAllSavedRecords(); // 解鎖後加載全員
-        } else alert("錯誤");
+            loadAllSavedRecords(); 
+        } else alert("密碼錯誤");
     }
 
     async function loadAllSavedRecords() {
@@ -153,14 +155,18 @@
                 scores, projScores
             })
         });
-        if((await res.json()).status === "success") { alert("存檔成功"); loadAllSavedRecords(); }
+        if((await res.json()).status === "success") { alert("✅ 存檔成功"); if(document.getElementById('bonusZone').classList.contains('unlocked')) loadAllSavedRecords(); }
     }
 
     function updateChart() {
         const scores = Array.from(document.querySelectorAll('.q-score')).map(i => i.value===""?null:parseFloat(i.value));
         const ctx = document.getElementById('trendChart').getContext('2d');
         if (trendChart) trendChart.destroy();
-        trendChart = new Chart(ctx, { type: 'line', data: { labels: scores.map((_,i)=>i+1), datasets: [{ label: '評分', data: scores, borderColor: '#3498db' }] } });
+        trendChart = new Chart(ctx, {
+            type: 'line',
+            data: { labels: scores.map((_,i)=>i+1), datasets: [{ label: '評分', data: scores, borderColor: '#3498db' }] },
+            options: { maintainAspectRatio: false, plugins: { datalabels: { align: 'top' } } }
+        });
     }
 </script>
 </body>
