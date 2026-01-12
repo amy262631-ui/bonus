@@ -2,7 +2,7 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <title>獎金管理系統 - 終極穩定版</title>
+    <title>獎金管理系統 - 終極修正版</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
     <style>
@@ -13,7 +13,7 @@
         select, input#calcYear { font-size: 1.5rem; padding: 10px; border: 2px solid var(--accent); border-radius: 8px; }
         .score-container { display: flex; flex-wrap: wrap; gap: 10px; background: #eef2f7; padding: 20px; border-radius: 12px; align-items: center; }
         .q-score { width: 75px; height: 50px; font-size: 1.4rem; text-align: center; border: 2px solid var(--accent); border-radius: 8px; font-weight: bold; }
-        .avg-display { background: var(--primary); color: white; padding: 12px 25px; border-radius: 10px; font-size: 1.5rem; font-weight: bold; margin-left: auto; }
+        .avg-display { background: var(--primary); color: white; padding: 15px 25px; border-radius: 10px; font-size: 1.5rem; font-weight: bold; margin-left: auto; }
         .bonus-box { display: flex; flex-direction: column; align-items: center; }
         .base-val { color: var(--success); font-size: 1rem; font-weight: bold; }
         .adj-input { width: 100px; color: var(--danger); font-size: 1.2rem; font-weight: bold; border: 2px dashed var(--danger); text-align: center; background: #fff5f5; border-radius: 6px; }
@@ -33,7 +33,7 @@
         年度：<input type="number" id="calcYear" value="2025" style="width:120px;" onchange="autoCalc()">
         <button class="btn" style="background:#888;" onclick="clearScores()">🧹 清除</button>
         <button class="btn" style="background:var(--accent);" onclick="handleSaveScores()">💾 暫存分數</button>
-        <button class="btn" style="background:var(--danger);" id="unlockBtn" onclick="askPassword()">🔒 主管解鎖</button>
+        <button class="btn" style="background:var(--danger);" id="unlockBtn" onclick="askPassword()">🔒 主管核定</button>
     </div>
     <div id="scoreInputs" class="score-container"></div>
     <div class="chart-container"><canvas id="scoreChart"></canvas></div>
@@ -83,12 +83,14 @@
         renderTimeline(); autoCalc(); 
     }
 
+    // 前端即時反應，解決當兵月份平均分問題
     function localUpdate() {
         const inputs = Array.from(document.querySelectorAll('.q-score'));
         const scores = inputs.map(i => i.value==="" ? null : parseFloat(i.value));
         const valid = scores.filter(v => v !== null && !isNaN(v));
         const avg = valid.length > 0 ? (valid.reduce((a,b)=>a+b,0)/valid.length).toFixed(2) : "0.00";
         document.getElementById('avgSpan').innerText = avg;
+        if(document.getElementById('avgLab')) document.getElementById('avgLab').innerText = avg;
         updateScoreChart(inputs, scores);
         clearTimeout(window.calcTimer);
         window.calcTimer = setTimeout(autoCalc, 800);
@@ -106,6 +108,7 @@
             const r = await res.json();
             
             if(r.status === "success") {
+                // 歷史回填判斷
                 if(r.historyScores && Array.from(inputs).every(i => i.value === "")) {
                     r.historyScores.forEach((v, i) => { if (v !== null && inputs[i]) inputs[i].value = v; });
                 }
@@ -118,7 +121,7 @@
                 document.getElementById('resultBody').innerHTML = `
                     <tr>
                         <td>${document.getElementById('selEmp').value}</td><td>${document.getElementById('calcYear').value}</td>
-                        <td id="avgLab">${finalAvg}</td>
+                        <td id="avgLab" style="font-weight:bold; color:blue;">${finalAvg}</td>
                         ${ ['f1','f2','f3','ye'].map((k, i) => `
                             <td><div class="bonus-box">
                                 <span class="base-val">${baseResults[k]}</span>
@@ -130,7 +133,7 @@
                 if(document.getElementById('adminZone').style.display === 'block') updateTrendChart();
                 updateScoreChart(inputs, Array.from(inputs).map(i => i.value===""?null:parseFloat(i.value)));
             }
-        } catch(e) { console.error("CORS 連線攔截，請確保 GAS 部署為『所有人』存取", e); }
+        } catch(e) { console.error("連線攔截，請確保 GAS 部署為『所有人』存取", e); }
     }
 
     function updateScoreChart(inputs, scores) {
@@ -183,7 +186,6 @@
         for(let i=1; i<=4; i++) { document.getElementById(`t_r_Q${i}`).value = timelineData[`Q${i}`].r; document.getElementById(`t_s_Q${i}`).value = timelineData[`Q${i}`].s; }
     }
     function updateLocalTimeline() { for(let i=1; i<=4; i++) { timelineData["Q"+i] = { r: document.getElementById(`t_r_Q${i}`).value, s: parseFloat(document.getElementById(`t_s_Q${i}`).value) || 0 }; } }
-    function downloadChart(c, f) { const l = document.createElement('a'); l.href = document.getElementById(c).toDataURL(); l.download = f; l.click(); }
 </script>
 </body>
 </html>
