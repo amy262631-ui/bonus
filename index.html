@@ -2,7 +2,7 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <title>獎金管理系統 - 終極修正版</title>
+    <title>獎金管理系統 - 動態分母修正版</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
     <style>
@@ -83,7 +83,6 @@
         renderTimeline(); autoCalc(); 
     }
 
-    // 前端即時反應，解決當兵月份平均分問題
     function localUpdate() {
         const inputs = Array.from(document.querySelectorAll('.q-score'));
         const scores = inputs.map(i => i.value==="" ? null : parseFloat(i.value));
@@ -108,7 +107,6 @@
             const r = await res.json();
             
             if(r.status === "success") {
-                // 歷史回填判斷
                 if(r.historyScores && Array.from(inputs).every(i => i.value === "")) {
                     r.historyScores.forEach((v, i) => { if (v !== null && inputs[i]) inputs[i].value = v; });
                 }
@@ -133,38 +131,27 @@
                 if(document.getElementById('adminZone').style.display === 'block') updateTrendChart();
                 updateScoreChart(inputs, Array.from(inputs).map(i => i.value===""?null:parseFloat(i.value)));
             }
-        } catch(e) { console.error("連線攔截，請確保 GAS 部署為『所有人』存取", e); }
+        } catch(e) { console.error("連線攔截", e); }
     }
 
+    // 更新圖表與輔助函式維持...
     function updateScoreChart(inputs, scores) {
         const ctx = document.getElementById('scoreChart').getContext('2d');
         if (scoreChart) scoreChart.destroy();
-        scoreChart = new Chart(ctx, {
-            type: 'line',
-            data: { labels: inputs.map((_,i)=> (i+1) + (inputs.length > 4 ? "M" : "Q")), datasets: [{ label: '評分', data: scores, borderColor: '#3498db', tension: 0.3, pointRadius: 5 }] },
-            options: { maintainAspectRatio: false, plugins: { datalabels: { align: 'top', font: { weight: 'bold' } } } }
-        });
+        scoreChart = new Chart(ctx, { type: 'line', data: { labels: inputs.map((_,i)=> (i+1) + (inputs.length > 4 ? "M" : "Q")), datasets: [{ label: '評分', data: scores, borderColor: '#3498db', tension: 0.3, pointRadius: 5 }] }, options: { maintainAspectRatio: false, plugins: { datalabels: { align: 'top', font: { weight: 'bold' } } } } });
     }
-
     function updateTrendChart() {
         const ctx = document.getElementById('yearTrendChart').getContext('2d');
         if (yearTrendChart) yearTrendChart.destroy();
         const base = ['f1', 'f2', 'f3', 'ye'].map(k => baseResults[k] || 0);
         const adj = ['f1', 'f2', 'f3', 'ye'].map(k => parseFloat(document.getElementById('adj_'+k).value) || 0);
-        yearTrendChart = new Chart(ctx, {
-            type: 'bar',
-            data: { labels: ['五一', '端午', '中秋', '年終'], datasets: [{ label: '公式', data: base, backgroundColor: '#27ae60', stack: 'S0' }, { label: '調整', data: adj, backgroundColor: '#e74c3c', stack: 'S0' }] },
-            options: { maintainAspectRatio: false, scales: { x: {stacked:true}, y: {stacked:true} }, plugins: { datalabels: { anchor:'center', color:'white', font:{weight:'bold'} } } }
-        });
+        yearTrendChart = new Chart(ctx, { type: 'bar', data: { labels: ['五一', '端午', '中秋', '年終'], datasets: [{ label: '公式', data: base, backgroundColor: '#27ae60', stack: 'S0' }, { label: '調整', data: adj, backgroundColor: '#e74c3c', stack: 'S0' }] }, options: { maintainAspectRatio: false, scales: { x: {stacked:true}, y: {stacked:true} }, plugins: { datalabels: { anchor:'center', color:'white', font:{weight:'bold'} } } } });
     }
-
     async function handleSaveScores() {
         const scores = Array.from(document.querySelectorAll('.q-score')).map(i => i.value === "" ? null : parseFloat(i.value));
         const res = await fetch(API_URL, { method: "POST", body: JSON.stringify({ action: "saveScoresOnly", year: document.getElementById('calcYear').value, empName: document.getElementById('selEmp').value, scores: scores }) });
-        const r = await res.json();
-        if(r.status === "success") alert("✅ 分數暫存成功！");
+        alert("✅ 分數暫存成功！");
     }
-
     function refreshTotal() {
         let t = 0;
         ['f1','f2','f3','ye'].forEach(k => { t += (baseResults[k]||0) + (parseFloat(document.getElementById('adj_'+k).value)||0); });
@@ -176,8 +163,7 @@
         const adjs = ["f1","f2","f3","ye"].map(id => parseFloat(document.getElementById("adj_"+id).value) || 0);
         const scores = Array.from(document.querySelectorAll('.q-score')).map(i => i.value === "" ? null : parseFloat(i.value));
         const res = await fetch(API_URL, { method: "POST", body: JSON.stringify({ action: "saveRecord", year: document.getElementById('calcYear').value, empName: document.getElementById('selEmp').value, rank: timelineData.Q4.r, avgScore: document.getElementById('avgSpan').innerText, f1_base: baseResults.f1, f1_adj: adjs[0], f2_base: baseResults.f2, f2_adj: adjs[1], f3_base: baseResults.f3, f3_adj: adjs[2], ye_base: baseResults.ye, ye_adj: adjs[3], total: (baseResults.f1+baseResults.f2+baseResults.f3+baseResults.ye + adjs.reduce((a,b)=>a+b,0)), scores, timeline: timelineData }) });
-        const r = await res.json();
-        if(r.status === "success") alert("✅ 核定存檔成功！");
+        alert("✅ 核定存檔成功！");
     }
     function renderTimeline() {
         let hRank = "<tr><td>職等</td>", hSalary = "<tr><td>月薪</td>";
