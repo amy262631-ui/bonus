@@ -2,7 +2,7 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <title>獎金系統 - 動態分母同步版</title>
+    <title>獎金管理系統 - 終極穩定版</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
     <style>
@@ -23,29 +23,30 @@
 <body>
 
 <div class="card">
-    <div class="loading-mask" id="loading">連線中...</div>
+    <div class="loading-mask" id="loading">讀取中...</div>
     <div class="header-controls">
         員工：<select id="selEmp" onchange="initUI()"></select>
-        年度：<input type="number" id="calcYear" value="2025" onchange="autoCalc()">
-        <button class="btn" style="background:var(--danger);" id="unlockBtn" onclick="askPassword()">🔒 主管核定</button>
+        年度：<input type="number" id="calcYear" value="2025" style="width:120px;" onchange="autoCalc()">
+        <button class="btn" style="background:var(--danger);" id="unlockBtn" onclick="askPassword()">🔒 主管核定區</button>
     </div>
     <div id="scoreInputs" class="score-container"></div>
     <div style="height:250px; margin-top:15px;"><canvas id="scoreChart"></canvas></div>
 </div>
 
 <div id="adminZone" style="display:none;" class="card">
-    <h2 style="color:var(--danger)">2. 核定區：<span style="color:var(--success)">■ 公式</span> + <span style="color:var(--danger)">■ 調整</span></h2>
-    <table style="width:100%; border-collapse:collapse; text-align:center; margin-bottom:20px;">
+    <h2 style="color:var(--danger)">核定結果 (綠色公式+紅色調整)</h2>
+    <table style="width:100%; border-collapse:collapse; text-align:center;">
         <thead><tr style="background:#eee;"><th>姓名</th><th>年度</th><th>平均分</th><th>五一</th><th>端午</th><th>中秋</th><th>年終</th><th>實領總計</th></tr></thead>
         <tbody id="resultBody"></tbody>
     </table>
-    <div style="text-align:right;">
-        <button id="saveBtn" onclick="handleFinalSave()" class="btn" style="background:var(--success); padding: 15px 50px;">✅ 確認核定存檔</button>
+    <div style="text-align:right; margin-top:20px;">
+        <button id="saveBtn" onclick="handleFinalSave()" class="btn" style="background:var(--success); padding: 18px 60px; font-size: 1.3rem;">✅ 確認核定存檔</button>
     </div>
     <div style="height: 400px; margin-top:20px;"><canvas id="yearTrendChart"></canvas></div>
 </div>
 
 <script>
+    // ⚠️ 請確保此網址正確，並在 GAS 完成部署 (所有人存取)
     const API_URL = "https://script.google.com/macros/s/AKfycbz9kLPJjKS5XZsYmgy_Hk77YKKL7X_8qIJkQrNGyJLEcGb3XKrb0lotAjcNhRCL5EXB/exec"; 
     let scoreChart = null, yearTrendChart = null, timelineData = {}, baseResults = {};
     Chart.register(ChartDataLabels);
@@ -54,10 +55,12 @@
 
     window.onload = async () => {
         showLoading(true);
-        const res = await fetch(API_URL);
-        const r = await res.json();
-        document.getElementById('selEmp').innerHTML = r.data.map(e => `<option value="${e.name}" data-rank="${e.rank}" data-salary="${e.salary}">${e.name}</option>`).join('');
-        initUI();
+        try {
+            const res = await fetch(API_URL);
+            const r = await res.json();
+            document.getElementById('selEmp').innerHTML = r.data.map(e => `<option value="${e.name}" data-rank="${e.rank}" data-salary="${e.salary}">${e.name}</option>`).join('');
+            initUI();
+        } catch(e) { console.error("連線失敗", e); }
         showLoading(false);
     };
 
@@ -73,16 +76,13 @@
         autoCalc(); 
     }
 
-    // 核心邏輯：前端算出平均分，供後面所有步驟使用
     function localUpdate() {
         const inputs = Array.from(document.querySelectorAll('.q-score'));
         const scores = inputs.map(i => i.value==="" ? null : parseFloat(i.value));
         const valid = scores.filter(v => v !== null && !isNaN(v));
-        
         // 動態分母平均
         const avg = valid.length > 0 ? (valid.reduce((a,b)=>a+b,0)/valid.length).toFixed(2) : "0.00";
         document.getElementById('avgSpan').innerText = avg;
-        
         updateScoreChart(inputs, scores);
         clearTimeout(window.calcTimer);
         window.calcTimer = setTimeout(autoCalc, 800);
@@ -102,7 +102,7 @@
                     year: document.getElementById('calcYear').value, 
                     scores, 
                     timeline: timelineData,
-                    avgScore: avgScore // 將前端算好的動態分母平均傳給後端
+                    avgScore: avgScore // 傳入前端算好的動態平均分
                 }) 
             });
             const r = await res.json();
@@ -112,14 +112,14 @@
                 document.getElementById('resultBody').innerHTML = `
                     <tr>
                         <td>${document.getElementById('selEmp').value}</td><td>${document.getElementById('calcYear').value}</td>
-                        <td style="font-weight:bold; color:blue;">${avgScore}</td>
-                        ${ ['f1','f2','f3','ye'].map((k, i) => `<td><small style="color:green;font-weight:bold">${baseResults[k]}</small><br><input type="number" class="adj-input" id="adj_${k}" value="${hAdjs[i]}" style="border:2px dashed red" oninput="refreshTotal(); updateTrendChart();"></td>`).join('') }
+                        <td style="font-weight:bold; color:blue; font-size:1.6rem;">${avgScore}</td>
+                        ${ ['f1','f2','f3','ye'].map((k, i) => `<td><small style="color:green;font-weight:bold">${baseResults[k]}</small><br><input type="number" class="adj-input" id="adj_${k}" value="${hAdjs[i]}" oninput="refreshTotal(); updateTrendChart();"></td>`).join('') }
                         <td id="totalCell" class="total-cell">0</td>
                     </tr>`;
                 refreshTotal();
                 if(document.getElementById('adminZone').style.display === 'block') updateTrendChart();
             }
-        } catch(e) { console.error(e); }
+        } catch(e) { console.error("API連線中斷或CORS攔截"); }
     }
 
     function updateTrendChart() {
@@ -165,7 +165,7 @@
         if (scoreChart) scoreChart.destroy();
         scoreChart = new Chart(ctx, { type: 'line', data: { labels: inputs.map((_,i)=>i+1), datasets: [{ label: '評分', data: scores, borderColor: '#3498db', tension: 0.3 }] }, options: { maintainAspectRatio: false } });
     }
-    function askPassword() { if(prompt("密碼")==="0000") { document.getElementById('adminZone').style.display='block'; setTimeout(updateTrendChart, 100); } }
+    function askPassword() { if(prompt("管理密碼")==="0000") { document.getElementById('adminZone').style.display='block'; setTimeout(updateTrendChart, 100); } }
 </script>
 </body>
 </html>
