@@ -2,9 +2,8 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <title>獎金管理系統 - 終極穩定版</title>
+    <title>獎金管理系統 - 資料回填修正版</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
     <style>
         :root { --primary: #2c3e50; --accent: #3498db; --success: #27ae60; --danger: #e74c3c; --bg: #f4f7f6; }
         body { font-family: "Microsoft JhengHei", sans-serif; background: var(--bg); padding: 20px; }
@@ -13,54 +12,49 @@
         .header-controls { display: flex; gap: 15px; align-items: center; margin-bottom: 20px; font-size: 1.5rem; font-weight: bold; }
         select, input { font-size: 1.4rem; padding: 10px; border: 2px solid var(--accent); border-radius: 8px; }
         .score-container { display: flex; flex-wrap: wrap; gap: 10px; background: #eef2f7; padding: 20px; border-radius: 12px; }
-        .q-score { width: 75px; height: 50px; font-size: 1.4rem; text-align: center; border: 2px solid #ccc; border-radius: 8px; font-weight: bold; }
-        .avg-display { background: var(--primary); color: white; padding: 15px 25px; border-radius: 10px; font-size: 1.5rem; margin-left: auto; }
-        .btn { padding: 12px 24px; border: none; border-radius: 8px; cursor: pointer; color: white; font-weight: bold; }
-        .adj-input { width: 100px; color: var(--danger); font-size: 1.2rem; font-weight: bold; border: 2px dashed var(--danger); text-align: center; }
-        .total-cell { font-size: 1.8rem; font-weight: bold; background: #fff3cd; color: #d35400; }
+        .q-score { width: 75px; height: 55px; font-size: 1.5rem; text-align: center; border: 2px solid #ccc; border-radius: 8px; font-weight: bold; }
+        .avg-display { background: var(--primary); color: white; padding: 15px 30px; border-radius: 10px; font-size: 1.6rem; margin-left: auto; }
+        .btn { padding: 15px 30px; border: none; border-radius: 8px; cursor: pointer; color: white; font-weight: bold; }
+        table { width: 100%; border-collapse: collapse; text-align: center; margin-top: 20px; }
+        th, td { border: 1px solid #ddd; padding: 12px; font-size: 1.2rem; }
+        .adj-input { width: 100px; color: var(--danger); font-size: 1.3rem; border: 2px dashed var(--danger); text-align: center; }
     </style>
 </head>
 <body>
 
 <div class="card">
-    <div class="loading-mask" id="loading">讀取中...</div>
+    <div class="loading-mask" id="loading">連線中...</div>
     <div class="header-controls">
         員工：<select id="selEmp" onchange="initUI()"></select>
-        年度：<input type="number" id="calcYear" value="2025" style="width:120px;" onchange="autoCalc()">
-        <button class="btn" style="background:var(--danger);" id="unlockBtn" onclick="askPassword()">🔒 主管核定區</button>
+        年度：<input type="number" id="calcYear" value="2025" onchange="autoCalc(true)">
+        <button class="btn" style="background:var(--danger);" onclick="askPassword()">🔒 核定區</button>
     </div>
     <div id="scoreInputs" class="score-container"></div>
-    <div style="height:250px; margin-top:15px;"><canvas id="scoreChart"></canvas></div>
+    <div style="height:280px; margin-top:15px;"><canvas id="scoreChart"></canvas></div>
 </div>
 
 <div id="adminZone" style="display:none;" class="card">
-    <h2 style="color:var(--danger)">核定結果 (綠色公式+紅色調整)</h2>
-    <table style="width:100%; border-collapse:collapse; text-align:center;">
-        <thead><tr style="background:#eee;"><th>姓名</th><th>年度</th><th>平均分</th><th>五一</th><th>端午</th><th>中秋</th><th>年終</th><th>實領總計</th></tr></thead>
+    <h2 style="color:var(--danger)">獎金核定 (公式+調整)</h2>
+    <table>
+        <thead><tr style="background:#eee;"><th>姓名</th><th>年度</th><th>平均分</th><th>五一</th><th>端午</th><th>中秋</th><th>年終</th><th>實領</th></tr></thead>
         <tbody id="resultBody"></tbody>
     </table>
-    <div style="text-align:right; margin-top:20px;">
-        <button id="saveBtn" onclick="handleFinalSave()" class="btn" style="background:var(--success); padding: 18px 60px; font-size: 1.3rem;">✅ 確認核定存檔</button>
-    </div>
+    <div style="text-align:right;"><button id="saveBtn" onclick="handleFinalSave()" class="btn" style="background:var(--success);">✅ 確認核定存檔</button></div>
     <div style="height: 400px; margin-top:20px;"><canvas id="yearTrendChart"></canvas></div>
 </div>
 
 <script>
-    // ⚠️ 請確保此網址正確，並在 GAS 完成部署 (所有人存取)
     const API_URL = "https://script.google.com/macros/s/AKfycbz9kLPJjKS5XZsYmgy_Hk77YKKL7X_8qIJkQrNGyJLEcGb3XKrb0lotAjcNhRCL5EXB/exec"; 
     let scoreChart = null, yearTrendChart = null, timelineData = {}, baseResults = {};
-    Chart.register(ChartDataLabels);
 
     function showLoading(s) { document.getElementById('loading').style.display = s ? 'flex' : 'none'; }
 
     window.onload = async () => {
         showLoading(true);
-        try {
-            const res = await fetch(API_URL);
-            const r = await res.json();
-            document.getElementById('selEmp').innerHTML = r.data.map(e => `<option value="${e.name}" data-rank="${e.rank}" data-salary="${e.salary}">${e.name}</option>`).join('');
-            initUI();
-        } catch(e) { console.error("連線失敗", e); }
+        const res = await fetch(API_URL);
+        const r = await res.json();
+        document.getElementById('selEmp').innerHTML = r.data.map(e => `<option value="${e.name}" data-rank="${e.rank}" data-salary="${e.salary}">${e.name}</option>`).join('');
+        initUI();
         showLoading(false);
     };
 
@@ -73,14 +67,13 @@
         html += `<div class="avg-display">平均：<span id="avgSpan">0.00</span></div>`;
         document.getElementById('scoreInputs').innerHTML = html;
         timelineData = { Q1:{r:opt.dataset.rank, s:opt.dataset.salary}, Q2:{r:opt.dataset.rank, s:opt.dataset.salary}, Q3:{r:opt.dataset.rank, s:opt.dataset.salary}, Q4:{r:opt.dataset.rank, s:opt.dataset.salary} };
-        autoCalc(); 
+        autoCalc(true); 
     }
 
     function localUpdate() {
         const inputs = Array.from(document.querySelectorAll('.q-score'));
         const scores = inputs.map(i => i.value==="" ? null : parseFloat(i.value));
         const valid = scores.filter(v => v !== null && !isNaN(v));
-        // 動態分母平均
         const avg = valid.length > 0 ? (valid.reduce((a,b)=>a+b,0)/valid.length).toFixed(2) : "0.00";
         document.getElementById('avgSpan').innerText = avg;
         updateScoreChart(inputs, scores);
@@ -88,38 +81,41 @@
         window.calcTimer = setTimeout(autoCalc, 800);
     }
 
-    async function autoCalc() {
+    async function autoCalc(forceSync = false) {
         const avgScore = document.getElementById('avgSpan').innerText;
         const inputs = document.querySelectorAll('.q-score');
+        if (forceSync) inputs.forEach(i => i.value = ""); // 切換時清空，等待資料回填
+        
         const scores = Array.from(inputs).map(i => i.value === "" ? null : i.value);
         
         try {
             const res = await fetch(API_URL, { 
                 method: "POST", 
-                body: JSON.stringify({ 
-                    action: "calculateBonus", 
-                    empName: document.getElementById('selEmp').value, 
-                    year: document.getElementById('calcYear').value, 
-                    scores, 
-                    timeline: timelineData,
-                    avgScore: avgScore // 傳入前端算好的動態平均分
-                }) 
+                body: JSON.stringify({ action: "calculateBonus", empName: document.getElementById('selEmp').value, year: document.getElementById('calcYear').value, scores, timeline: timelineData, avgScore }) 
             });
             const r = await res.json();
             if(r.status === "success") {
+                // 資料回填關鍵：如果資料庫有分數，且畫面目前是空的，就填進去
+                if(r.historyScores) {
+                    r.historyScores.forEach((v, i) => { if (v !== null && inputs[i]) inputs[i].value = v; });
+                    // 回填後重新算出前端平均分
+                    const valid = r.historyScores.filter(v => v !== null).map(v => parseFloat(v));
+                    document.getElementById('avgSpan').innerText = valid.length > 0 ? (valid.reduce((a,b)=>a+b,0)/valid.length).toFixed(2) : "0.00";
+                }
                 baseResults = r.data;
                 const hAdjs = r.historyAdjs || [0,0,0,0];
                 document.getElementById('resultBody').innerHTML = `
                     <tr>
                         <td>${document.getElementById('selEmp').value}</td><td>${document.getElementById('calcYear').value}</td>
-                        <td style="font-weight:bold; color:blue; font-size:1.6rem;">${avgScore}</td>
+                        <td style="font-weight:bold; color:blue;">${document.getElementById('avgSpan').innerText}</td>
                         ${ ['f1','f2','f3','ye'].map((k, i) => `<td><small style="color:green;font-weight:bold">${baseResults[k]}</small><br><input type="number" class="adj-input" id="adj_${k}" value="${hAdjs[i]}" oninput="refreshTotal(); updateTrendChart();"></td>`).join('') }
-                        <td id="totalCell" class="total-cell">0</td>
+                        <td id="totalCell" style="font-weight:bold; background:#fff3cd;">0</td>
                     </tr>`;
                 refreshTotal();
+                updateScoreChart(inputs, Array.from(inputs).map(i => i.value===""?null:parseFloat(i.value)));
                 if(document.getElementById('adminZone').style.display === 'block') updateTrendChart();
             }
-        } catch(e) { console.error("API連線中斷或CORS攔截"); }
+        } catch(e) { console.error("連線攔截，請確保GAS已部署"); }
     }
 
     function updateTrendChart() {
@@ -133,7 +129,7 @@
                 { label: '公式', data: base, backgroundColor: '#27ae60', stack: 'S' },
                 { label: '調整', data: adj, backgroundColor: '#e74c3c', stack: 'S' }
             ]},
-            options: { maintainAspectRatio: false, scales: { x: {stacked:true}, y: {stacked:true} }, plugins: { datalabels: { anchor:'center', color:'white', font:{weight:'bold'} } } }
+            options: { maintainAspectRatio: false, scales: { x: {stacked:true}, y: {stacked:true} } }
         });
     }
 
@@ -155,9 +151,8 @@
             total: (baseResults.f1+baseResults.f2+baseResults.f3+baseResults.ye + adjs.reduce((a,b)=>a+b,0)), 
             scores, timeline: timelineData 
         }) });
-        const r = await res.json();
         showLoading(false);
-        if(r.status === "success") alert("✅ 核定存檔成功！");
+        alert("✅ 存檔完成");
     }
 
     function updateScoreChart(inputs, scores) {
@@ -165,7 +160,7 @@
         if (scoreChart) scoreChart.destroy();
         scoreChart = new Chart(ctx, { type: 'line', data: { labels: inputs.map((_,i)=>i+1), datasets: [{ label: '評分', data: scores, borderColor: '#3498db', tension: 0.3 }] }, options: { maintainAspectRatio: false } });
     }
-    function askPassword() { if(prompt("管理密碼")==="0000") { document.getElementById('adminZone').style.display='block'; setTimeout(updateTrendChart, 100); } }
+    function askPassword() { if(prompt("密碼")==="0000") { document.getElementById('adminZone').style.display='block'; setTimeout(updateTrendChart, 100); } }
 </script>
 </body>
 </html>
