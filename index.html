@@ -174,27 +174,72 @@
         if(document.getElementById('adminZone').style.display === 'block') { updateCurrentYearChart(); updateHistoryTrendChart(); }
     }
 
-    function updateScoreChart() {
-        const ctx = document.getElementById('scoreChart').getContext('2d');
-        if (scoreChart) scoreChart.destroy();
-        const annData = Array.from(document.querySelectorAll('.ann-in')).map(i => parseFloat(i.value));
-        const prjData = Array.from(document.querySelectorAll('.prj-in')).map(i => parseFloat(i.value));
+   function updateScoreChart() {
+    const ctx = document.getElementById('scoreChart').getContext('2d');
+    if (scoreChart) scoreChart.destroy();
 
-        scoreChart = new Chart(ctx, {
-            type: 'line',
-            data: { 
-                labels: Array.from({length:12}, (_,i)=>i+1), 
-                datasets: [
-                    { label: '年度評分', data: annData, borderColor: '#3498db', tension: 0.3, pointRadius: 5 },
-                    { label: '專案評分', data: prjData, borderColor: '#e67e22', tension: 0.3, pointRadius: 5, borderDash: [5, 5] }
-                ] 
-            },
-            options: { 
-                maintainAspectRatio: false,
-                plugins: { datalabels: { align: 'top', offset: 5, font: { weight: 'bold' }, formatter: v => isNaN(v) ? '' : v } }
-            }
-        });
+    // 取得原始輸入值
+    const annRaw = Array.from(document.querySelectorAll('.ann-in')).map(i => parseFloat(i.value));
+    const prjData = Array.from(document.querySelectorAll('.prj-in')).map(i => parseFloat(i.value));
+
+    // 年度評分點位映射邏輯：如果只有 4 季，則映射到 3, 6, 9, 12 月
+    let annMappedData = [];
+    if (annRaw.length === 4) {
+        annMappedData = [
+            {x: 3, y: annRaw[0]}, 
+            {x: 6, y: annRaw[1]}, 
+            {x: 9, y: annRaw[2]}, 
+            {x: 12, y: annRaw[3]}
+        ];
+    } else {
+        // 如果原本就是 12 個月 (L1人員)，則正常排列
+        annMappedData = annRaw.map((v, i) => ({x: i + 1, y: v}));
     }
+
+    scoreChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            datasets: [
+                {
+                    label: '年度評分 (每季)',
+                    data: annMappedData, // 使用映射後的數據
+                    borderColor: '#3498db',
+                    tension: 0.3,
+                    pointRadius: 6,
+                    showLine: true, // 點跟點之間會連線
+                    spanGaps: true  // 讓數據中間的空白月份也能連線
+                },
+                {
+                    label: '專案評分 (每月)',
+                    data: prjData.map((v, i) => ({x: i + 1, y: v})),
+                    borderColor: '#e67e22',
+                    tension: 0.3,
+                    pointRadius: 4,
+                    borderDash: [5, 5] // 專案評分改用虛線區隔
+                }
+            ]
+        },
+        options: {
+            maintainAspectRatio: false,
+            scales: {
+                x: {
+                    type: 'linear', // 改用線性座標軸
+                    min: 1,
+                    max: 12,
+                    ticks: { stepSize: 1, callback: v => v + '月' }
+                }
+            },
+            plugins: {
+                datalabels: {
+                    align: 'top',
+                    offset: 8,
+                    font: { weight: 'bold' },
+                    formatter: v => (v && v.y) ? v.y : ''
+                }
+            }
+        }
+    });
+}
 
     function updateCurrentYearChart() {
         const ctx = document.getElementById('currentYearChart').getContext('2d');
