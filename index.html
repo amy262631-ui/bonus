@@ -279,11 +279,28 @@
     }
 
     function refreshTotal() {
-        let t = 0;
-        ['f1', 'f2', 'f3', 'ye', 'proj'].forEach(k => { t += parseFloat(document.getElementById('target_' + k)?.value) || 0; });
-        if(document.getElementById('totalCell')) document.getElementById('totalCell').innerText = t.toLocaleString();
-        if(document.getElementById('adminZone').style.display === 'block') updateAdminCharts();
+    let t = 0;
+    ['f1', 'f2', 'f3', 'ye', 'proj'].forEach(k => {
+        // 加上 ? 防止元素為 null 時報錯
+        const el = document.getElementById('target_' + k);
+        if (el) {
+            t += parseFloat(el.value) || 0;
+        }
+    });
+    
+    const totalCell = document.getElementById('totalCell');
+    if (totalCell) {
+        totalCell.innerText = t.toLocaleString();
     }
+    
+    // 只有當主管區是顯示狀態，且必要的輸入框已產生時才更新圖表
+    if (document.getElementById('adminZone').style.display === 'block') {
+        const checkEl = document.getElementById('adj_proj_base');
+        if (checkEl) {
+            updateAdminCharts();
+        }
+    }
+}
 
     function updateScoreChart() {
         const ctx = document.getElementById('scoreChart').getContext('2d');
@@ -329,18 +346,44 @@
     }
 
     function updateAdminCharts() {
-        const ctx = document.getElementById('currentYearChart').getContext('2d');
-        if (currentYearChart) currentYearChart.destroy();
-        const pCalc = Math.round(parseFloat(document.getElementById('adj_proj_base').value) * (baseResults.projMult || 0));
-        currentYearChart = new Chart(ctx, {
-            type: 'bar',
-            data: { labels: ['五一','端午','中秋','年終','專案'], datasets: [
-                { label: '公式基數', data: [baseResults.f1, baseResults.f2, baseResults.f3, baseResults.ye, pCalc], backgroundColor: '#27ae60', stack: 'A' },
-                { label: '手動調整', data: ['f1','f2','f3','ye'].map(k=>((parseFloat(document.getElementById('target_'+k).value)||0)-baseResults[k])).concat([(parseFloat(document.getElementById('target_proj').value)||0)-pCalc]), backgroundColor: '#e74c3c', stack: 'A' }
-            ]},
-            options: { maintainAspectRatio: false, scales: { x: { stacked: true }, y: { stacked: true } } }
-        });
-    }
+    const ctx = document.getElementById('currentYearChart').getContext('2d');
+    if (currentYearChart) currentYearChart.destroy();
+
+    // 防呆：如果元素不存在（還沒渲染出來），就先跳出不執行
+    const adjProjBaseEl = document.getElementById('adj_proj_base');
+    if (!adjProjBaseEl) return;
+
+    const pCalc = Math.round(parseFloat(adjProjBaseEl.value) * (baseResults.projMult || 0));
+    
+    currentYearChart = new Chart(ctx, {
+        type: 'bar',
+        data: { 
+            labels: ['五一','端午','中秋','年終','專案'], 
+            datasets: [
+                { 
+                    label: '公式基數', 
+                    data: [baseResults.f1, baseResults.f2, baseResults.f3, baseResults.ye, pCalc], 
+                    backgroundColor: '#27ae60', 
+                    stack: 'A' 
+                },
+                { 
+                    label: '手動調整', 
+                    data: ['f1','f2','f3','ye'].map(k => {
+                        const el = document.getElementById('target_' + k);
+                        return el ? ((parseFloat(el.value) || 0) - baseResults[k]) : 0;
+                    }).concat([ (parseFloat(document.getElementById('target_proj').value) || 0) - pCalc ]), 
+                    backgroundColor: '#e74c3c', 
+                    stack: 'A' 
+                }
+            ]
+        },
+        options: { 
+            maintainAspectRatio: false, 
+            scales: { x: { stacked: true }, y: { stacked: true } },
+            plugins: { datalabels: { display: false } } // 主管核定圖維持乾淨
+        }
+    });
+}
 </script>
 </body>
 </html>
