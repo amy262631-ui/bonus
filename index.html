@@ -10,17 +10,14 @@
         body { font-family: "Microsoft JhengHei", sans-serif; background: var(--bg); padding: 20px; }
         .card { background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); margin-bottom: 25px; }
         
-        /* 加大標頭輸入區 */
         .header-controls { display: flex; gap: 20px; align-items: center; margin-bottom: 20px; font-size: 1.2rem; }
         #selEmp, #calcYear { padding: 8px 15px; font-size: 1.2rem; border-radius: 8px; border: 1px solid #ccc; }
         
-        /* 評分區塊與標籤 */
         .score-container { display: flex; flex-direction: column; gap: 10px; padding: 15px; background: #f8f9fa; border-radius: 10px; border-left: 8px solid var(--primary); margin-bottom: 15px; }
         .score-grid { display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-end; }
         .input-group { display: flex; flex-direction: column; align-items: center; gap: 4px; }
         .input-label { font-size: 0.85rem; color: #666; font-weight: bold; }
         
-        /* 加大分數輸入框 */
         .q-score { width: 65px; height: 45px; text-align: center; font-size: 1.3rem; font-weight: bold; border: 2px solid #ddd; border-radius: 6px; }
         .q-score:focus { border-color: var(--accent); outline: none; background: #fffde7; }
 
@@ -113,7 +110,6 @@
         const opt = sel.options[sel.selectedIndex];
         const isL1 = opt.dataset.rank === 'L1';
         
-        // 生成年度評分輸入 (帶標籤)
         let h1 = '';
         const count = isL1 ? 12 : 4;
         for(let i=1; i<=count; i++) {
@@ -122,7 +118,6 @@
         }
         document.getElementById('annualInputs').innerHTML = h1;
 
-        // 生成專案評分輸入 (1-12月標籤)
         let h2 = '';
         for(let i=1; i<=12; i++) {
             h2 += `<div class="input-group"><span class="input-label">${i}月</span><input type="number" class="q-score prj-in" oninput="localUpdate()"></div>`;
@@ -134,6 +129,12 @@
     }
 
     function localUpdate() {
+        refreshAvgDisplays();
+        clearTimeout(window.calcTimer);
+        window.calcTimer = setTimeout(autoCalc, 800);
+    }
+
+    function refreshAvgDisplays() {
         const getAvg = (cls) => {
             const vals = Array.from(document.querySelectorAll(cls)).map(i => parseFloat(i.value)).filter(v => !isNaN(v));
             return vals.length > 0 ? (vals.reduce((a,b)=>a+b,0)/vals.length).toFixed(2) : "0.00";
@@ -141,11 +142,9 @@
         document.getElementById('avgSpan').innerText = getAvg('.ann-in');
         document.getElementById('projAvgSpan').innerText = getAvg('.prj-in');
         updateScoreChart();
-        clearTimeout(window.calcTimer);
-        window.calcTimer = setTimeout(autoCalc, 800);
     }
 
-   async function autoCalc(forceSync = false) {
+    async function autoCalc(forceSync = false) {
         const payload = { 
             action: "calculateBonus", 
             empName: document.getElementById('selEmp').value, 
@@ -157,70 +156,68 @@
             projAvg: document.getElementById('projAvgSpan').innerText 
         };
         
-        const res = await fetch(API_URL, { method: "POST", body: JSON.stringify(payload) });
-        const r = await res.json();
+        try {
+            const res = await fetch(API_URL, { method: "POST", body: JSON.stringify(payload) });
+            const r = await res.json();
 
-        if(r.status === "success") {
-            // --- 1. 無論如何先處理分數同步 (解決分數沒出來的問題) ---
-            if(forceSync || r.historyScores || r.historyProjScores) {
-                if(r.historyScores) r.historyScores.forEach((v,i) => { 
-                    const el = document.querySelectorAll('.ann-in')[i];
-                    if(el) el.value = v; 
-                });
-                if(r.historyProjScores) r.historyProjScores.forEach((v,i) => { 
-                    const el = document.querySelectorAll('.prj-in')[i];
-                    if(el) el.value = v; 
-                });
-                if(r.historyTimeline) timelineData = r.historyTimeline;
-                
-                // 同步完分數後更新平均值顯示
-                const getAvg = (cls) => {
-                    const vals = Array.from(document.querySelectorAll(cls)).map(i => parseFloat(i.value)).filter(v => !isNaN(v));
-                    return vals.length > 0 ? (vals.reduce((a,b)=>a+b,0)/vals.length).toFixed(2) : "0.00";
-                };
-                document.getElementById('avgSpan').innerText = getAvg('.ann-in');
-                document.getElementById('projAvgSpan').innerText = getAvg('.prj-in');
-                updateScoreChart();
+            if(r.status === "success") {
+                console.log("Debug Info:", r.debug); // 用來檢查後端抓到的薪資與職等
+
+                if(forceSync || r.historyScores || r.historyProjScores) {
+                    if(r.historyScores) {
+                        const annInputs = document.querySelectorAll('.ann-in');
+                        r.historyScores.forEach((v,i) => { if(annInputs[i]) annInputs[i].value = v; });
+                    }
+                    if(r.historyProjScores) {
+                        const prjInputs = document.querySelectorAll('.prj-in');
+                        r.historyProjScores.forEach((v,i) => { if(prjInputs[i]) prjInputs[i].value = v; });
+                    }
+                    if(r.historyTimeline) timelineData = r.historyTimeline;
+                    refreshAvgDisplays();
+                }
+
+                baseResults = r.data;
+                renderTimelineUI();
+                updateAdminTable(r.historyAdjs);
             }
+        } catch(e) { console.error("計算失敗", e); }
+    }
 
-            // --- 2. 處理獎金核定區 (主管區) ---
-            baseResults = r.data;
-            renderTimelineUI();
-            
-            const adjs = r.historyAdjs || [0,0,0,0,80000,0];
-            const pMult = parseFloat(baseResults.projMult) || 0;
-            const pCalc = (pMult > 0) ? Math.round(parseFloat(adjs[4]) * pMult) : 0;
-            const getVal = (i, b) => Math.round(b + (parseFloat(adjs[i])||0));
+    function updateAdminTable(historyAdjs) {
+        const adjs = historyAdjs || [0,0,0,0,80000,0];
+        const pMult = parseFloat(baseResults.projMult) || 0;
+        const pCalc = (pMult > 0) ? Math.round(parseFloat(adjs[4]) * pMult) : 0;
+        const getVal = (i, b) => Math.round((parseFloat(b)||0) + (parseFloat(adjs[i])||0));
 
-            const resultBody = document.getElementById('resultBody');
-            if (resultBody) {
-                resultBody.innerHTML = `
-                    <tr>
-                        <td>${document.getElementById('selEmp').value}</td>
-                        <td>${document.getElementById('calcYear').value}</td>
-                        <td style="color:blue;font-weight:bold;font-size:1.2rem;">${document.getElementById('avgSpan').innerText}</td>
-                        ${ ['f1','f2','f3','ye'].map((k, i) => `<td><small style="color:green;">${baseResults[k]}</small><br><input type="number" class="target-input" id="target_${k}" value="${getVal(i, baseResults[k])}" oninput="refreshTotal()"></td>`).join('') }
-                        <td>
-                            基數:<input type="number" id="adj_proj_base" value="${adjs[4]}" oninput="refreshTotal()" style="width:85px; font-size:1.1rem;"><br>
-                            <small style="color:${pCalc > 0 ? 'black' : 'red'}; font-weight:bold;">${pCalc > 0 ? '試算:'+pCalc.toLocaleString() : '未參與分潤'}</small><br>
-                            <input type="number" class="target-input" id="target_proj" value="${pCalc > 0 ? getVal(5, pCalc) : 0}" oninput="refreshTotal()">
-                        </td>
-                        <td id="totalCell" class="total-cell">0</td>
-                    </tr>`;
-                refreshTotal();
-            }
-        }
+        const resultBody = document.getElementById('resultBody');
+        if (!resultBody) return;
+
+        resultBody.innerHTML = `
+            <tr>
+                <td>${document.getElementById('selEmp').value}</td>
+                <td>${document.getElementById('calcYear').value}</td>
+                <td style="color:blue;font-weight:bold;font-size:1.2rem;">${document.getElementById('avgSpan').innerText}</td>
+                ${ ['f1','f2','f3','ye'].map((k, i) => `
+                    <td>
+                        <small style="color:green; font-weight:bold;">基數:${baseResults[k]||0}</small><br>
+                        <input type="number" class="target-input" id="target_${k}" value="${getVal(i, baseResults[k])}" oninput="refreshTotal()">
+                    </td>`).join('') }
+                <td>
+                    基數:<input type="number" id="adj_proj_base" value="${adjs[4]}" oninput="refreshTotal()" style="width:85px; font-size:1.1rem;"><br>
+                    <small style="color:${pCalc > 0 ? 'black' : 'red'}; font-weight:bold;">${pCalc > 0 ? '試算:'+pCalc.toLocaleString() : '未參與分潤'}</small><br>
+                    <input type="number" class="target-input" id="target_proj" value="${pCalc > 0 ? getVal(5, pCalc) : 0}" oninput="refreshTotal()">
+                </td>
+                <td id="totalCell" class="total-cell">0</td>
+            </tr>`;
+        refreshTotal();
     }
 
     async function updateHistoryCharts() {
         const res = await fetch(API_URL, { method: "POST", body: JSON.stringify({ action: "getHistoryComparison", empName: document.getElementById('selEmp').value }) });
         const r = await res.json();
         if(r.status === "success" && r.history.length > 0) {
-            
-            // 1. 各項獎金跨年對比 (長條圖)
             const ctx1 = document.getElementById('historyCompareChart').getContext('2d');
             if(historyCompareChart) historyCompareChart.destroy();
-            
             historyCompareChart = new Chart(ctx1, {
                 type: 'bar',
                 data: {
@@ -229,73 +226,28 @@
                         label: d.year + ' 年',
                         data: [d.f1, d.f2, d.f3, d.ye, d.proj],
                         backgroundColor: `rgba(52, 152, 219, ${0.4 + (i*0.3)})`,
-                        borderColor: '#2980b9', borderWidth: 1,
-                        barPercentage: 0.6, categoryPercentage: 0.8
+                        borderColor: '#2980b9', borderWidth: 1
                     }))
                 },
                 options: {
-    maintainAspectRatio: false,
-    layout: { 
-        padding: { 
-            top: 65,    // 再次加大頂部空間，防止 151,000 這種大字跑出去
-            right: 40, 
-            left: 20, 
-            bottom: 20 
-        } 
-    },
-    plugins: {
-        datalabels: {
-            display: true,
-            anchor: 'end',
-            align: 'top',
-            font: { weight: 'bold', size: 15 }, // 讓數字更大更清楚
-            color: '#c0392b',
-            formatter: (v) => v > 0 ? v.toLocaleString() : '',
-            offset: 8  // 數字與長條圖的間距
-        }
-    },
-                    scales: { 
-                        y: { beginAtZero: true, ticks: { font: { size: 12 }, callback: v => v.toLocaleString() } },
-                        x: { ticks: { font: { size: 14, weight: 'bold' } } }
-                    }
+                    maintainAspectRatio: false,
+                    layout: { padding: { top: 65, right: 40, left: 20, bottom: 20 } },
+                    plugins: { datalabels: { display: true, anchor: 'end', align: 'top', font: { weight: 'bold', size: 14 }, color: '#c0392b', formatter: (v) => v > 0 ? v.toLocaleString() : '' } }
                 }
             });
 
-            // 2. 年度實領總金額 (折線圖)
             const ctx2 = document.getElementById('historyTotalChart').getContext('2d');
             if(historyTotalChart) historyTotalChart.destroy();
             historyTotalChart = new Chart(ctx2, {
                 type: 'line',
                 data: {
                     labels: r.history.map(d => d.year + '年度'),
-                    datasets: [{ 
-                        label: '年度實領總金額', 
-                        data: r.history.map(d => d.total), 
-                        borderColor: '#e67e22', 
-                        backgroundColor: '#e67e22',
-                        pointRadius: 10, // 點加大，好讀
-                        fill: false, 
-                        tension: 0.2 
-                    }]
+                    datasets: [{ label: '年度總額', data: r.history.map(d => d.total), borderColor: '#e67e22', pointRadius: 8, fill: false }]
                 },
-                options: { 
+                options: {
                     maintainAspectRatio: false,
-                    layout: { padding: { top: 40, left: 20, right: 40, bottom: 10 } }, // 大量增加四周邊距，防止文字跑出去
-                    plugins: { 
-                        datalabels: { 
-                            display: true, 
-                            align: 'top', 
-                            font: { weight: 'bold', size: 16 }, // 總額字體加大到 16px
-                            color: '#d35400',
-                            formatter: v => '總領：' + v.toLocaleString() + ' 元',
-                            offset: 10
-                        },
-                        legend: { display: false } // 隱藏圖例省空間
-                    },
-                    scales: {
-                        y: { display: false }, // 隱藏 Y 軸，讓線圖更乾淨，文字更清楚
-                        x: { ticks: { font: { size: 14, weight: 'bold' } } }
-                    }
+                    layout: { padding: { top: 40, left: 20, right: 40, bottom: 10 } },
+                    plugins: { datalabels: { display: true, align: 'top', font: { weight: 'bold', size: 15 }, color: '#d35400', formatter: v => v.toLocaleString() } }
                 }
             });
         }
@@ -308,34 +260,21 @@
         const r = await res.json();
         if(r.status === "success") { 
             document.getElementById('adminZone').style.display = 'block'; 
-            refreshTotal(); 
+            autoCalc(false);
             updateHistoryCharts(); 
         } else { alert("密碼錯誤！"); }
     }
 
     function refreshTotal() {
-    let t = 0;
-    ['f1', 'f2', 'f3', 'ye', 'proj'].forEach(k => {
-        // 加上 ? 防止元素為 null 時報錯
-        const el = document.getElementById('target_' + k);
-        if (el) {
-            t += parseFloat(el.value) || 0;
-        }
-    });
-    
-    const totalCell = document.getElementById('totalCell');
-    if (totalCell) {
-        totalCell.innerText = t.toLocaleString();
+        let t = 0;
+        ['f1', 'f2', 'f3', 'ye', 'proj'].forEach(k => {
+            const el = document.getElementById('target_' + k);
+            if (el) t += parseFloat(el.value) || 0;
+        });
+        const tc = document.getElementById('totalCell');
+        if (tc) tc.innerText = t.toLocaleString();
+        if (document.getElementById('adminZone').style.display === 'block') updateAdminCharts();
     }
-    
-    // 只有當主管區是顯示狀態，且必要的輸入框已產生時才更新圖表
-    if (document.getElementById('adminZone').style.display === 'block') {
-        const checkEl = document.getElementById('adj_proj_base');
-        if (checkEl) {
-            updateAdminCharts();
-        }
-    }
-}
 
     function updateScoreChart() {
         const ctx = document.getElementById('scoreChart').getContext('2d');
@@ -350,7 +289,7 @@
     }
 
     async function handleFinalSave() {
-        const getDiff = (id, b) => (parseFloat(document.getElementById(id).value)||0) - b;
+        const getDiff = (id, b) => (parseFloat(document.getElementById(id).value)||0) - (parseFloat(b)||0);
         const pCalc = Math.round(parseFloat(document.getElementById('adj_proj_base').value) * (baseResults.projMult || 0));
         const data = {
             action: "saveRecord", year: document.getElementById('calcYear').value, empName: document.getElementById('selEmp').value,
@@ -367,7 +306,7 @@
             timeline: timelineData
         };
         const res = await fetch(API_URL, { method: "POST", body: JSON.stringify(data) });
-        if((await res.json()).status === "success") { alert("✅ 存檔成功！"); if(document.getElementById('adminZone').style.display==='block') updateHistoryCharts(); }
+        if((await res.json()).status === "success") { alert("✅ 存檔成功！"); updateHistoryCharts(); }
     }
 
     function renderTimelineUI() {
@@ -381,44 +320,25 @@
     }
 
     function updateAdminCharts() {
-    const ctx = document.getElementById('currentYearChart').getContext('2d');
-    if (currentYearChart) currentYearChart.destroy();
-
-    // 防呆：如果元素不存在（還沒渲染出來），就先跳出不執行
-    const adjProjBaseEl = document.getElementById('adj_proj_base');
-    if (!adjProjBaseEl) return;
-
-    const pCalc = Math.round(parseFloat(adjProjBaseEl.value) * (baseResults.projMult || 0));
-    
-    currentYearChart = new Chart(ctx, {
-        type: 'bar',
-        data: { 
-            labels: ['五一','端午','中秋','年終','專案'], 
-            datasets: [
-                { 
-                    label: '公式基數', 
-                    data: [baseResults.f1, baseResults.f2, baseResults.f3, baseResults.ye, pCalc], 
-                    backgroundColor: '#27ae60', 
-                    stack: 'A' 
-                },
-                { 
-                    label: '手動調整', 
-                    data: ['f1','f2','f3','ye'].map(k => {
-                        const el = document.getElementById('target_' + k);
-                        return el ? ((parseFloat(el.value) || 0) - baseResults[k]) : 0;
-                    }).concat([ (parseFloat(document.getElementById('target_proj').value) || 0) - pCalc ]), 
-                    backgroundColor: '#e74c3c', 
-                    stack: 'A' 
-                }
-            ]
-        },
-        options: { 
-            maintainAspectRatio: false, 
-            scales: { x: { stacked: true }, y: { stacked: true } },
-            plugins: { datalabels: { display: false } } // 主管核定圖維持乾淨
-        }
-    });
-}
+        const ctx = document.getElementById('currentYearChart').getContext('2d');
+        if (currentYearChart) currentYearChart.destroy();
+        const pCalc = Math.round(parseFloat(document.getElementById('adj_proj_base').value) * (baseResults.projMult || 0));
+        currentYearChart = new Chart(ctx, {
+            type: 'bar',
+            data: { 
+                labels: ['五一','端午','中秋','年終','專案'], 
+                datasets: [
+                    { label: '公式基數', data: [baseResults.f1, baseResults.f2, baseResults.f3, baseResults.ye, pCalc], backgroundColor: '#27ae60', stack: 'A' },
+                    { label: '手動調整', data: ['f1','f2','f3','ye'].map(k => getDiffForChart(k)).concat([ (parseFloat(document.getElementById('target_proj').value) || 0) - pCalc ]), backgroundColor: '#e74c3c', stack: 'A' }
+                ]
+            },
+            options: { maintainAspectRatio: false, scales: { x: { stacked: true }, y: { stacked: true } }, plugins: { datalabels: { display: false } } }
+        });
+    }
+    function getDiffForChart(k) {
+        const el = document.getElementById('target_' + k);
+        return el ? ((parseFloat(el.value) || 0) - (baseResults[k]||0)) : 0;
+    }
 </script>
 </body>
 </html>
