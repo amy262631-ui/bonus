@@ -187,6 +187,8 @@
         const res = await fetch(API_URL, { method: "POST", body: JSON.stringify({ action: "getHistoryComparison", empName: document.getElementById('selEmp').value }) });
         const r = await res.json();
         if(r.status === "success" && r.history.length > 0) {
+            
+            // 1. 各項獎金跨年對比 (長條圖)
             const ctx1 = document.getElementById('historyCompareChart').getContext('2d');
             if(historyCompareChart) historyCompareChart.destroy();
             
@@ -199,39 +201,67 @@
                         data: [d.f1, d.f2, d.f3, d.ye, d.proj],
                         backgroundColor: `rgba(52, 152, 219, ${0.4 + (i*0.3)})`,
                         borderColor: '#2980b9', borderWidth: 1,
-                        barPercentage: 0.4, categoryPercentage: 0.8,
-                        totalSum: d.total // 自定義屬性儲存年度總額
+                        barPercentage: 0.6, categoryPercentage: 0.8
                     }))
                 },
                 options: {
                     maintainAspectRatio: false,
+                    layout: { padding: { top: 30 } }, // 預留頂部空間給數字
                     plugins: {
                         datalabels: {
-                            anchor: 'end', align: 'top', font: { weight: 'bold', size: 10 },
-                            formatter: (value, context) => {
-                                // 僅在每組的最後一個年度顯示該年度總額
-                                if (context.dataIndex === 4) {
-                                    return '總額: ' + context.dataset.totalSum.toLocaleString();
-                                }
-                                return null;
-                            },
-                            color: '#d35400',
-                            offset: 10
-                        }
+                            display: true, // 全部顯示
+                            anchor: 'end', 
+                            align: 'top', 
+                            font: { weight: 'bold', size: 14 }, // 字體加大到 14px 且加粗
+                            color: '#1a1a1a', // 深色文字，對比度更高
+                            formatter: (value) => value > 0 ? value.toLocaleString() : '', // 格式化千分位
+                            offset: 5
+                        },
+                        legend: { labels: { font: { size: 14 } } } // 標籤也放大
                     },
-                    scales: { y: { beginAtZero: true, ticks: { callback: v => v.toLocaleString() } } }
+                    scales: { 
+                        y: { beginAtZero: true, ticks: { font: { size: 12 }, callback: v => v.toLocaleString() } },
+                        x: { ticks: { font: { size: 14, weight: 'bold' } } }
+                    }
                 }
             });
 
+            // 2. 年度實領總金額 (折線圖)
             const ctx2 = document.getElementById('historyTotalChart').getContext('2d');
             if(historyTotalChart) historyTotalChart.destroy();
             historyTotalChart = new Chart(ctx2, {
                 type: 'line',
                 data: {
-                    labels: r.history.map(d => d.year),
-                    datasets: [{ label: '年度實領總金額', data: r.history.map(d => d.total), borderColor: '#e67e22', pointRadius: 8, fill: false, tension:0.2 }]
+                    labels: r.history.map(d => d.year + '年度'),
+                    datasets: [{ 
+                        label: '年度實領總金額', 
+                        data: r.history.map(d => d.total), 
+                        borderColor: '#e67e22', 
+                        backgroundColor: '#e67e22',
+                        pointRadius: 10, // 點加大，好讀
+                        fill: false, 
+                        tension: 0.2 
+                    }]
                 },
-                options: { maintainAspectRatio: false, plugins: { datalabels: { display: true, align: 'top', formatter: v => '年度實領: ' + v.toLocaleString() } } }
+                options: { 
+                    maintainAspectRatio: false,
+                    layout: { padding: { top: 40, left: 20, right: 40, bottom: 10 } }, // 大量增加四周邊距，防止文字跑出去
+                    plugins: { 
+                        datalabels: { 
+                            display: true, 
+                            align: 'top', 
+                            font: { weight: 'bold', size: 16 }, // 總額字體加大到 16px
+                            color: '#d35400',
+                            formatter: v => '總領：' + v.toLocaleString() + ' 元',
+                            offset: 10
+                        },
+                        legend: { display: false } // 隱藏圖例省空間
+                    },
+                    scales: {
+                        y: { display: false }, // 隱藏 Y 軸，讓線圖更乾淨，文字更清楚
+                        x: { ticks: { font: { size: 14, weight: 'bold' } } }
+                    }
+                }
             });
         }
     }
