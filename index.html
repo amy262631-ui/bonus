@@ -2,7 +2,7 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <title>獎金管理系統 - 終極修復連動版</title>
+    <title>獎金管理系統 - 目標金額調整版</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
     <style>
@@ -18,7 +18,7 @@
         .timeline-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
         .timeline-table th, .timeline-table td { border: 1px solid #ddd; padding: 8px; text-align: center; }
         .total-cell { font-size: 1.8rem; font-weight: bold; background: #fff3cd; color: #d35400; }
-        .adj-input { width: 90px; color: var(--danger); font-size: 1.1rem; border: 2px dashed var(--danger); text-align: center; }
+        .target-input { width: 100px; color: var(--danger); font-size: 1.1rem; border: 2px solid var(--danger); text-align: center; font-weight: bold; background: #fff5f5; }
     </style>
 </head>
 <body>
@@ -47,7 +47,7 @@
 </div>
 
 <div id="adminZone" style="display:none;" class="card">
-    <h2 style="color:var(--danger)">獎金核定區</h2>
+    <h2 style="color:var(--danger)">獎金核定區 (目標金額輸入模式)</h2>
     
     <div style="background:#eee; padding:15px; border-radius:10px; margin-bottom:20px;">
         <h4 style="margin-top:0;">📊 年度職等薪資異動 (Timeline)</h4>
@@ -58,7 +58,7 @@
     </div>
 
     <table style="width:100%; text-align:center; border-collapse:collapse;">
-        <thead><tr style="background:#f4f4f4;"><th>姓名</th><th>年度</th><th>平均分</th><th>五一</th><th>端午</th><th>中秋</th><th>年終</th><th style="color:var(--project)">專案獎金基數/調整</th><th>實領總計</th></tr></thead>
+        <thead><tr style="background:#f4f4f4;"><th>姓名</th><th>年度</th><th>平均分</th><th>五一</th><th>端午</th><th>中秋</th><th>年終</th><th style="color:var(--project)">專案獎金基數/最終額</th><th>實領總計</th></tr></thead>
         <tbody id="resultBody"></tbody>
     </table>
     
@@ -78,31 +78,21 @@
     Chart.register(ChartDataLabels);
 
     window.onload = async () => {
-        try {
-            const res = await fetch(API_URL);
-            const r = await res.json();
-            document.getElementById('selEmp').innerHTML = r.data.map(e => `<option value="${e.name}" data-rank="${e.rank}" data-salary="${e.salary}">${e.name}</option>`).join('');
-            initUI();
-        } catch(e) { console.error("初始化失敗"); }
+        const res = await fetch(API_URL);
+        const r = await res.json();
+        document.getElementById('selEmp').innerHTML = r.data.map(e => `<option value="${e.name}" data-rank="${e.rank}" data-salary="${e.salary}">${e.name}</option>`).join('');
+        initUI();
     };
 
     function initUI() {
         const sel = document.getElementById('selEmp');
         const opt = sel.options[sel.selectedIndex];
         const count = opt.dataset.rank === 'L1' ? 12 : 4;
-        
         let h1 = ''; for(let i=0; i<count; i++) h1 += `<input type="number" class="q-score ann-in" oninput="localUpdate()">`;
         document.getElementById('annualInputs').innerHTML = h1;
-
         let h2 = ''; for(let i=0; i<12; i++) h2 += `<input type="number" class="q-score proj-score prj-in" oninput="localUpdate()">`;
         document.getElementById('projInputs').innerHTML = h2;
-
-        timelineData = { 
-            Q1:{r:opt.dataset.rank, s:opt.dataset.salary}, 
-            Q2:{r:opt.dataset.rank, s:opt.dataset.salary}, 
-            Q3:{r:opt.dataset.rank, s:opt.dataset.salary}, 
-            Q4:{r:opt.dataset.rank, s:opt.dataset.salary} 
-        };
+        timelineData = { Q1:{r:opt.dataset.rank, s:opt.dataset.salary}, Q2:{r:opt.dataset.rank, s:opt.dataset.salary}, Q3:{r:opt.dataset.rank, s:opt.dataset.salary}, Q4:{r:opt.dataset.rank, s:opt.dataset.salary} };
         autoCalc(true); 
     }
 
@@ -124,49 +114,114 @@
         const annScores = Array.from(document.querySelectorAll('.ann-in')).map(i => i.value || null);
         const prjScores = Array.from(document.querySelectorAll('.prj-in')).map(i => i.value || null);
 
-        try {
-            const res = await fetch(API_URL, { method: "POST", body: JSON.stringify({ 
-                action: "calculateBonus", empName: document.getElementById('selEmp').value, 
-                year: document.getElementById('calcYear').value, scores: annScores, 
-                projScores: prjScores, timeline: timelineData, avgScore: avg, projAvg: prjAvg 
-            }) });
-            const r = await res.json();
-            
-            if(r.status === "success") {
-                if(forceSync) {
-                    if(r.historyScores) r.historyScores.forEach((v,i) => { if(document.querySelectorAll('.ann-in')[i]) document.querySelectorAll('.ann-in')[i].value = v; });
-                    // 修復 JSON 解析錯誤
-                    if(r.historyProjScores) {
-                        try {
-                            const pScores = typeof r.historyProjScores === 'string' ? JSON.parse(r.historyProjScores) : r.historyProjScores;
-                            pScores.forEach((v,i) => { if(document.querySelectorAll('.prj-in')[i]) document.querySelectorAll('.prj-in')[i].value = v; });
-                        } catch(e) { console.warn("專案分數解析失敗"); }
-                    }
-                    if(r.historyTimeline) timelineData = r.historyTimeline;
-                    localUpdate();
+        const res = await fetch(API_URL, { method: "POST", body: JSON.stringify({ 
+            action: "calculateBonus", empName: document.getElementById('selEmp').value, 
+            year: document.getElementById('calcYear').value, scores: annScores, 
+            projScores: prjScores, timeline: timelineData, avgScore: avg, projAvg: prjAvg 
+        }) });
+        const r = await res.json();
+        
+        if(r.status === "success") {
+            if(forceSync) {
+                if(r.historyScores) r.historyScores.forEach((v,i) => { if(document.querySelectorAll('.ann-in')[i]) document.querySelectorAll('.ann-in')[i].value = v; });
+                if(r.historyProjScores) {
+                    const pS = typeof r.historyProjScores === 'string' ? JSON.parse(r.historyProjScores) : r.historyProjScores;
+                    pS.forEach((v,i) => { if(document.querySelectorAll('.prj-in')[i]) document.querySelectorAll('.prj-in')[i].value = v; });
                 }
-                baseResults = r.data;
-                renderTimelineUI();
-                const adjs = r.historyAdjs || [0,0,0,0,80000,0];
-                const projCalc = Math.round(parseFloat(adjs[4]) * (baseResults.projMult || 0));
-
-                document.getElementById('resultBody').innerHTML = `
-                    <tr>
-                        <td>${document.getElementById('selEmp').value}</td><td>${document.getElementById('calcYear').value}</td>
-                        <td style="font-weight:bold; color:blue;">${avg}</td>
-                        ${ ['f1','f2','f3','ye'].map((k, i) => `<td><small style="color:green;font-weight:bold">${baseResults[k]}</small><br><input type="number" class="adj-input" id="adj_${k}" value="${adjs[i]}" oninput="refreshTotal()"></td>`).join('') }
-                        <td>
-                            基數：<input type="number" class="tm-input" id="adj_proj_base" value="${adjs[4]}" oninput="refreshTotal()" style="width:80px;">
-                            <br><small style="color:var(--project)">試算: ${projCalc.toLocaleString()}</small>
-                            <br>調整：<input type="number" class="adj-input" id="adj_proj_val" value="${adjs[5]}" oninput="refreshTotal()">
-                        </td>
-                        <td id="totalCell" class="total-cell">0</td>
-                    </tr>`;
-                refreshTotal();
+                if(r.historyTimeline) timelineData = r.historyTimeline;
+                localUpdate();
             }
-        } catch(e) { console.error("連線錯誤"); }
+            baseResults = r.data;
+            renderTimelineUI();
+            const adjs = r.historyAdjs || [0,0,0,0,80000,0]; // 0-3三節年終公式, 4基數, 5歷史調整值
+            
+            const projCalc = Math.round(parseFloat(adjs[4]) * (baseResults.projMult || 0));
+            
+            // 處理歷史數據：如果歷史有紀錄「最終領取金額」，則反推
+            const getHistVal = (i, base) => adjs[i] === 0 ? base : (base + adjs[i]);
+
+            document.getElementById('resultBody').innerHTML = `
+                <tr>
+                    <td>${document.getElementById('selEmp').value}</td><td>${document.getElementById('calcYear').value}</td>
+                    <td style="font-weight:bold; color:blue;">${avg}</td>
+                    ${ ['f1','f2','f3','ye'].map((k, i) => `
+                        <td>
+                            <small style="color:green;font-weight:bold">${baseResults[k]}</small><br>
+                            <input type="number" class="target-input" id="target_${k}" value="${getHistVal(i, baseResults[k])}" oninput="refreshTotal()">
+                        </td>`).join('') }
+                    <td>
+                        基數：<input type="number" class="tm-input" id="adj_proj_base" value="${adjs[4]}" oninput="refreshTotal()" style="width:70px;"><br>
+                        <small style="color:var(--project)">試算: ${projCalc.toLocaleString()}</small><br>
+                        最終：<input type="number" class="target-input" id="target_proj" value="${getHistVal(5, projCalc)}" oninput="refreshTotal()">
+                    </td>
+                    <td id="totalCell" class="total-cell">0</td>
+                </tr>`;
+            refreshTotal();
+        }
     }
 
+    function refreshTotal() {
+        const totalCell = document.getElementById('totalCell');
+        if (!totalCell) return;
+        let t = 0;
+        ['f1', 'f2', 'f3', 'ye'].forEach(k => {
+            const targetEl = document.getElementById('target_' + k);
+            t += targetEl ? parseFloat(targetEl.value) || 0 : 0;
+        });
+        const targetProj = document.getElementById('target_proj');
+        t += targetProj ? parseFloat(targetProj.value) || 0 : 0;
+        totalCell.innerText = t.toLocaleString();
+        if(document.getElementById('adminZone').style.display === 'block') updateAdminCharts();
+    }
+
+    function updateAdminCharts() {
+        const ctx1 = document.getElementById('currentYearChart').getContext('2d');
+        if (currentYearChart) currentYearChart.destroy();
+        
+        const pBase = parseFloat(document.getElementById('adj_proj_base').value) || 0;
+        const pCalc = Math.round(pBase * (baseResults.projMult || 0));
+
+        // 計算差額以便畫圖
+        const getDiff = (id, base) => (parseFloat(document.getElementById(id)?.value) || 0) - base;
+
+        currentYearChart = new Chart(ctx1, {
+            type: 'bar',
+            data: { 
+                labels: ['五一', '端午', '中秋', '年終', '專案'], 
+                datasets: [
+                    { label: '公式/基數', data: ['f1','f2','f3','ye'].map(k => baseResults[k]).concat([pCalc]), backgroundColor: ['#27ae60','#27ae60','#27ae60','#27ae60','#2980b9'], stack: 'S' },
+                    { label: '手動增減', data: ['f1','f2','f3','ye'].map(k => getDiff('target_'+k, baseResults[k])).concat([getDiff('target_proj', pCalc)]), backgroundColor: '#e74c3c', stack: 'S' }
+                ]
+            },
+            options: { maintainAspectRatio: false, scales: { x: { stacked: true }, y: { stacked: true } } }
+        });
+    }
+
+    // 其餘 initUI, renderTimelineUI, updateTimeline, updateScoreChart, handleFinalSave 維持上一版本邏輯，僅需更新 handleFinalSave 打包調整值
+    async function handleFinalSave() {
+        const pBase = parseFloat(document.getElementById('adj_proj_base').value) || 0;
+        const pCalc = Math.round(pBase * (baseResults.projMult || 0));
+        const getDiff = (id, base) => (parseFloat(document.getElementById(id).value) || 0) - base;
+
+        const data = {
+            action: "saveRecord", year: document.getElementById('calcYear').value, empName: document.getElementById('selEmp').value,
+            rank: timelineData.Q4.r, avgScore: document.getElementById('avgSpan').innerText,
+            f1_base: baseResults.f1, f1_adj: getDiff('target_f1', baseResults.f1),
+            f2_base: baseResults.f2, f2_adj: getDiff('target_f2', baseResults.f2),
+            f3_base: baseResults.f3, f3_adj: getDiff('target_f3', baseResults.f3),
+            ye_base: baseResults.ye, ye_adj: getDiff('target_ye', baseResults.ye),
+            proj_final_base: pBase,
+            proj_adj: getDiff('target_proj', pCalc),
+            total: document.getElementById('totalCell').innerText.replace(/,/g, ''),
+            scores: Array.from(document.querySelectorAll('.ann-in')).map(i => i.value || null),
+            projScores: Array.from(document.querySelectorAll('.prj-in')).map(i => i.value || null),
+            timeline: timelineData
+        };
+        const res = await fetch(API_URL, { method: "POST", body: JSON.stringify(data) });
+        if((await res.json()).status === "success") alert("✅ 核定存檔成功！已自動紀錄目標金額與調整差額。");
+    }
+
+    // 其餘輔助函式 (askPassword, downloadImg, updateScoreChart, renderTimelineUI) 請沿用前一版本
     function renderTimelineUI() {
         let rHtml = '<td>職等</td>', sHtml = '<td>月薪</td>';
         ['Q1','Q2','Q3','Q4'].forEach(q => {
@@ -177,20 +232,13 @@
         document.getElementById('tmSalaryRow').innerHTML = sHtml;
         document.querySelectorAll('.tm-rank-sel').forEach(sel => sel.value = timelineData[sel.dataset.q].r);
     }
-
-    function updateTimeline(q, field, val) {
-        timelineData[q][field] = field === 's' ? (parseFloat(val) || 0) : val;
-        autoCalc();
-    }
-
+    function updateTimeline(q, field, val) { timelineData[q][field] = field === 's' ? (parseFloat(val) || 0) : val; autoCalc(); }
     function updateScoreChart() {
         const ctx = document.getElementById('scoreChart').getContext('2d');
         if (scoreChart) scoreChart.destroy();
         const annRaw = Array.from(document.querySelectorAll('.ann-in')).map(i => parseFloat(i.value));
         const prjData = Array.from(document.querySelectorAll('.prj-in')).map(i => parseFloat(i.value));
-        
         let annMapped = annRaw.length === 4 ? [{x:3,y:annRaw[0]},{x:6,y:annRaw[1]},{x:9,y:annRaw[2]},{x:12,y:annRaw[3]}] : annRaw.map((v,i)=>({x:i+1,y:v}));
-
         scoreChart = new Chart(ctx, {
             type: 'line',
             data: { datasets: [
@@ -204,88 +252,7 @@
             }
         });
     }
-
-    function refreshTotal() {
-        const totalCell = document.getElementById('totalCell');
-        if (!totalCell) return; // 確保元素存在
-        
-        let t = 0;
-        ['f1', 'f2', 'f3', 'ye'].forEach(k => { 
-            const el = document.getElementById('adj_' + k);
-            t += (baseResults[k] || 0) + (el ? parseFloat(el.value) || 0 : 0); 
-        });
-        
-        const pbEl = document.getElementById('adj_proj_base');
-        const pvEl = document.getElementById('adj_proj_val');
-        const pBase = pbEl ? parseFloat(pbEl.value) || 0 : 0;
-        const pAdj = pvEl ? parseFloat(pvEl.value) || 0 : 0;
-        const projFinal = Math.round(pBase * (baseResults.projMult || 0)) + pAdj;
-        
-        totalCell.innerText = (t + projFinal).toLocaleString();
-        if(document.getElementById('adminZone').style.display === 'block') updateAdminCharts();
-    }
-
-    function updateAdminCharts() {
-        const ctx1 = document.getElementById('currentYearChart').getContext('2d');
-        if (currentYearChart) currentYearChart.destroy();
-        
-        const pbEl = document.getElementById('adj_proj_base');
-        const pvEl = document.getElementById('adj_proj_val');
-        const pBase = pbEl ? parseFloat(pbEl.value) || 0 : 0;
-        const pAdj = pvEl ? parseFloat(pvEl.value) || 0 : 0;
-        const pCalc = Math.round(pBase * (baseResults.projMult || 0));
-
-        currentYearChart = new Chart(ctx1, {
-            type: 'bar',
-            data: { 
-                labels: ['五一', '端午', '中秋', '年終', '專案'], 
-                datasets: [
-                    { label: '公式/基數', data: ['f1','f2','f3','ye'].map(k => baseResults[k] || 0).concat([pCalc]), backgroundColor: ['#27ae60','#27ae60','#27ae60','#27ae60','#2980b9'], stack: 'S' },
-                    { label: '調整', data: ['f1','f2','f3','ye'].map(k => parseFloat(document.getElementById('adj_'+k).value)||0).concat([pAdj]), backgroundColor: '#e74c3c', stack: 'S' }
-                ]
-            },
-            options: { maintainAspectRatio: false, scales: { x: { stacked: true }, y: { stacked: true } } }
-        });
-    }
-
-    async function handleFinalSave() {
-        if(!confirm("確定要核定存檔嗎？")) return;
-        const btn = document.getElementById('saveBtn');
-        if(btn) btn.disabled = true;
-
-        const data = {
-            action: "saveRecord", year: document.getElementById('calcYear').value, empName: document.getElementById('selEmp').value,
-            rank: timelineData.Q4.r, avgScore: document.getElementById('avgSpan').innerText,
-            f1_base: baseResults.f1, f1_adj: parseFloat(document.getElementById('adj_f1')?.value)||0,
-            f2_base: baseResults.f2, f2_adj: parseFloat(document.getElementById('adj_f2')?.value)||0,
-            f3_base: baseResults.f3, f3_adj: parseFloat(document.getElementById('adj_f3')?.value)||0,
-            ye_base: baseResults.ye, ye_adj: parseFloat(document.getElementById('adj_ye')?.value)||0,
-            proj_final_base: parseFloat(document.getElementById('adj_proj_base')?.value)||0,
-            proj_adj: parseFloat(document.getElementById('adj_proj_val')?.value)||0,
-            total: document.getElementById('totalCell').innerText.replace(/,/g, ''),
-            scores: Array.from(document.querySelectorAll('.ann-in')).map(i => i.value || null),
-            projScores: Array.from(document.querySelectorAll('.prj-in')).map(i => i.value || null),
-            timeline: timelineData
-        };
-
-        try {
-            const res = await fetch(API_URL, { method: "POST", body: JSON.stringify(data) });
-            const r = await res.json();
-            if(r.status === "success") alert("✅ 核定存檔成功！");
-            else alert("❌ 存檔失敗：" + r.msg);
-        } catch(e) { alert("❌ 網路錯誤"); }
-        finally { if(btn) btn.disabled = false; }
-    }
-
-    function askPassword() { 
-        if(prompt("密碼")==="0000") { 
-            document.getElementById('adminZone').style.display='block'; 
-            setTimeout(() => {
-                refreshTotal(); // 顯示後強迫跑一次試算與畫圖
-            }, 100);
-        } 
-    }
-    
+    function askPassword() { if(prompt("密碼")==="0000") { document.getElementById('adminZone').style.display='block'; setTimeout(refreshTotal, 100); } }
     function downloadImg(id, name) { const l = document.createElement('a'); l.href = document.getElementById(id).toDataURL(); l.download = name; l.click(); }
 </script>
 </body>
