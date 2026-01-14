@@ -145,9 +145,10 @@
         window.calcTimer = setTimeout(autoCalc, 800);
     }
 
-    async function autoCalc(forceSync = false) {
+   async function autoCalc(forceSync = false) {
         const payload = { 
-            action: "calculateBonus", empName: document.getElementById('selEmp').value, 
+            action: "calculateBonus", 
+            empName: document.getElementById('selEmp').value, 
             year: document.getElementById('calcYear').value, 
             scores: Array.from(document.querySelectorAll('.ann-in')).map(i => i.value||null), 
             projScores: Array.from(document.querySelectorAll('.prj-in')).map(i => i.value||null), 
@@ -155,37 +156,60 @@
             avgScore: document.getElementById('avgSpan').innerText, 
             projAvg: document.getElementById('projAvgSpan').innerText 
         };
+        
         const res = await fetch(API_URL, { method: "POST", body: JSON.stringify(payload) });
         const r = await res.json();
+
         if(r.status === "success") {
-        if(forceSync) {
-            // ... forceSync 邏輯維持不變 ...
-            return;
+            // --- 1. 無論如何先處理分數同步 (解決分數沒出來的問題) ---
+            if(forceSync || r.historyScores || r.historyProjScores) {
+                if(r.historyScores) r.historyScores.forEach((v,i) => { 
+                    const el = document.querySelectorAll('.ann-in')[i];
+                    if(el) el.value = v; 
+                });
+                if(r.historyProjScores) r.historyProjScores.forEach((v,i) => { 
+                    const el = document.querySelectorAll('.prj-in')[i];
+                    if(el) el.value = v; 
+                });
+                if(r.historyTimeline) timelineData = r.historyTimeline;
+                
+                // 同步完分數後更新平均值顯示
+                const getAvg = (cls) => {
+                    const vals = Array.from(document.querySelectorAll(cls)).map(i => parseFloat(i.value)).filter(v => !isNaN(v));
+                    return vals.length > 0 ? (vals.reduce((a,b)=>a+b,0)/vals.length).toFixed(2) : "0.00";
+                };
+                document.getElementById('avgSpan').innerText = getAvg('.ann-in');
+                document.getElementById('projAvgSpan').innerText = getAvg('.prj-in');
+                updateScoreChart();
+            }
+
+            // --- 2. 處理獎金核定區 (主管區) ---
+            baseResults = r.data;
+            renderTimelineUI();
+            
+            const adjs = r.historyAdjs || [0,0,0,0,80000,0];
+            const pMult = parseFloat(baseResults.projMult) || 0;
+            const pCalc = (pMult > 0) ? Math.round(parseFloat(adjs[4]) * pMult) : 0;
+            const getVal = (i, b) => Math.round(b + (parseFloat(adjs[i])||0));
+
+            const resultBody = document.getElementById('resultBody');
+            if (resultBody) {
+                resultBody.innerHTML = `
+                    <tr>
+                        <td>${document.getElementById('selEmp').value}</td>
+                        <td>${document.getElementById('calcYear').value}</td>
+                        <td style="color:blue;font-weight:bold;font-size:1.2rem;">${document.getElementById('avgSpan').innerText}</td>
+                        ${ ['f1','f2','f3','ye'].map((k, i) => `<td><small style="color:green;">${baseResults[k]}</small><br><input type="number" class="target-input" id="target_${k}" value="${getVal(i, baseResults[k])}" oninput="refreshTotal()"></td>`).join('') }
+                        <td>
+                            基數:<input type="number" id="adj_proj_base" value="${adjs[4]}" oninput="refreshTotal()" style="width:85px; font-size:1.1rem;"><br>
+                            <small style="color:${pCalc > 0 ? 'black' : 'red'}; font-weight:bold;">${pCalc > 0 ? '試算:'+pCalc.toLocaleString() : '未參與分潤'}</small><br>
+                            <input type="number" class="target-input" id="target_proj" value="${pCalc > 0 ? getVal(5, pCalc) : 0}" oninput="refreshTotal()">
+                        </td>
+                        <td id="totalCell" class="total-cell">0</td>
+                    </tr>`;
+                refreshTotal();
+            }
         }
-
-        baseResults = r.data;
-        renderTimelineUI();
-        
-        // --- 核心修正區：確保這三行存在且邏輯正確 ---
-        const adjs = r.historyAdjs || [0,0,0,0,80000,0];
-        const pCalc = (baseResults.projMult > 0) ? Math.round(parseFloat(adjs[4]) * baseResults.projMult) : 0;
-        const getVal = (i, b) => Math.round(b + (parseFloat(adjs[i])||0)); 
-        // ----------------------------------------
-
-        document.getElementById('resultBody').innerHTML = `
-            <tr>
-                <td>${document.getElementById('selEmp').value}</td><td>${document.getElementById('calcYear').value}</td>
-                <td style="color:blue;font-weight:bold;">${document.getElementById('avgSpan').innerText}</td>
-                ${ ['f1','f2','f3','ye'].map((k, i) => `<td><small style="color:green;">${baseResults[k]}</small><br><input type="number" class="target-input" id="target_${k}" value="${getVal(i, baseResults[k])}" oninput="refreshTotal()"></td>`).join('') }
-                <td>
-                    基數:<input type="number" id="adj_proj_base" value="${adjs[4]}" oninput="refreshTotal()" style="width:85px; font-size:1.1rem;"><br>
-                    <small style="color:${pCalc > 0 ? 'black' : 'red'}; font-weight:bold;">${pCalc > 0 ? '試算:'+pCalc.toLocaleString() : '未參與分潤'}</small><br>
-                    <input type="number" class="target-input" id="target_proj" value="${pCalc > 0 ? getVal(5, pCalc) : 0}" oninput="refreshTotal()">
-                </td>
-                <td id="totalCell" class="total-cell">0</td>
-            </tr>`;
-        refreshTotal();
-    }
     }
 
     async function updateHistoryCharts() {
