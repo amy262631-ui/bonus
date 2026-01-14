@@ -234,20 +234,26 @@
                     }))
                 },
                 options: {
-                    maintainAspectRatio: false,
-                    layout: { padding: { top: 30 } }, // 預留頂部空間給數字
-                    plugins: {
-                        datalabels: {
-                            display: true, // 全部顯示
-                            anchor: 'end', 
-                            align: 'top', 
-                            font: { weight: 'bold', size: 14 }, // 字體加大到 14px 且加粗
-                            color: '#1a1a1a', // 深色文字，對比度更高
-                            formatter: (value) => value > 0 ? value.toLocaleString() : '', // 格式化千分位
-                            offset: 5
-                        },
-                        legend: { labels: { font: { size: 14 } } } // 標籤也放大
-                    },
+    maintainAspectRatio: false,
+    layout: { 
+        padding: { 
+            top: 55,    // 再次加大頂部空間，防止 151,000 這種大字跑出去
+            right: 40, 
+            left: 20, 
+            bottom: 20 
+        } 
+    },
+    plugins: {
+        datalabels: {
+            display: true,
+            anchor: 'end',
+            align: 'top',
+            font: { weight: 'bold', size: 15 }, // 讓數字更大更清楚
+            color: '#c0392b',
+            formatter: (v) => v > 0 ? v.toLocaleString() : '',
+            offset: 8  // 數字與長條圖的間距
+        }
+    },
                     scales: { 
                         y: { beginAtZero: true, ticks: { font: { size: 12 }, callback: v => v.toLocaleString() } },
                         x: { ticks: { font: { size: 14, weight: 'bold' } } }
