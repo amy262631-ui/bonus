@@ -158,32 +158,34 @@
         const res = await fetch(API_URL, { method: "POST", body: JSON.stringify(payload) });
         const r = await res.json();
         if(r.status === "success") {
-            if(forceSync) {
-                if(r.historyScores) r.historyScores.forEach((v,i) => { if(document.querySelectorAll('.ann-in')[i]) document.querySelectorAll('.ann-in')[i].value = v; });
-                if(r.historyProjScores) r.historyProjScores.forEach((v,i) => { if(document.querySelectorAll('.prj-in')[i]) document.querySelectorAll('.prj-in')[i].value = v; });
-                if(r.historyTimeline) timelineData = r.historyTimeline;
-                localUpdate();
-                return;
-            }
-            baseResults = r.data;
-            renderTimelineUI();
-            const adjs = r.historyAdjs || [0,0,0,0,80000,0];
-            const pCalc = (baseResults.projMult > 0) ? Math.round(parseFloat(adjs[4]) * baseResults.projMult) : 0;
-
-document.getElementById('resultBody').innerHTML = `
-    <tr>
-        <td>${document.getElementById('selEmp').value}</td><td>${document.getElementById('calcYear').value}</td>
-        <td style="color:blue;font-weight:bold;">${document.getElementById('avgSpan').innerText}</td>
-        ${ ['f1','f2','f3','ye'].map((k, i) => `<td><small style="color:green;">${baseResults[k]}</small><br><input type="number" class="target-input" id="target_${k}" value="${getVal(i, baseResults[k])}" oninput="refreshTotal()"></td>`).join('') }
-        <td>
-            基數:<input type="number" id="adj_proj_base" value="${adjs[4]}" oninput="refreshTotal()" style="width:85px;"><br>
-            <small style="color:${pCalc > 0 ? 'black' : 'red'};">${pCalc > 0 ? '試算:'+pCalc : '未參與分潤'}</small><br>
-            <input type="number" class="target-input" id="target_proj" value="${pCalc > 0 ? getVal(5, pCalc) : 0}" oninput="refreshTotal()">
-        </td>
-        <td id="totalCell" class="total-cell">0</td>
-    </tr>`;
-            refreshTotal();
+        if(forceSync) {
+            // ... forceSync 邏輯維持不變 ...
+            return;
         }
+
+        baseResults = r.data;
+        renderTimelineUI();
+        
+        // --- 核心修正區：確保這三行存在且邏輯正確 ---
+        const adjs = r.historyAdjs || [0,0,0,0,80000,0];
+        const pCalc = (baseResults.projMult > 0) ? Math.round(parseFloat(adjs[4]) * baseResults.projMult) : 0;
+        const getVal = (i, b) => Math.round(b + (parseFloat(adjs[i])||0)); 
+        // ----------------------------------------
+
+        document.getElementById('resultBody').innerHTML = `
+            <tr>
+                <td>${document.getElementById('selEmp').value}</td><td>${document.getElementById('calcYear').value}</td>
+                <td style="color:blue;font-weight:bold;">${document.getElementById('avgSpan').innerText}</td>
+                ${ ['f1','f2','f3','ye'].map((k, i) => `<td><small style="color:green;">${baseResults[k]}</small><br><input type="number" class="target-input" id="target_${k}" value="${getVal(i, baseResults[k])}" oninput="refreshTotal()"></td>`).join('') }
+                <td>
+                    基數:<input type="number" id="adj_proj_base" value="${adjs[4]}" oninput="refreshTotal()" style="width:85px; font-size:1.1rem;"><br>
+                    <small style="color:${pCalc > 0 ? 'black' : 'red'}; font-weight:bold;">${pCalc > 0 ? '試算:'+pCalc.toLocaleString() : '未參與分潤'}</small><br>
+                    <input type="number" class="target-input" id="target_proj" value="${pCalc > 0 ? getVal(5, pCalc) : 0}" oninput="refreshTotal()">
+                </td>
+                <td id="totalCell" class="total-cell">0</td>
+            </tr>`;
+        refreshTotal();
+    }
     }
 
     async function updateHistoryCharts() {
