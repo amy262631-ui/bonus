@@ -20,11 +20,11 @@
         .q-score { width: 60px; height: 40px; text-align: center; font-size: 1.2rem; font-weight: bold; border: 2px solid #ddd; border-radius: 6px; }
         .avg-display { min-width: 150px; background: var(--primary); color: white; padding: 10px; border-radius: 8px; text-align: center; margin-left: auto; font-size: 1.1rem; font-weight: bold; }
         
-        /* 獎金表格字體與間距優化 */
-        .target-input { width: 110px; height: 40px; color: var(--danger); font-size: 1.3rem; border: 2px solid var(--danger); text-align: center; font-weight: bold; background: #fff5f5; border-radius: 6px; margin-top: 5px; }
+        /* 獎金表格字體與水平空間優化 */
+        .target-input { width: 110px; height: 40px; color: var(--danger); font-size: 1.4rem; border: 2px solid var(--danger); text-align: center; font-weight: bold; background: #fff5f5; border-radius: 6px; margin-top: 5px; }
         .reference-text { color: #27ae60; font-weight: bold; font-size: 0.9rem; display: block; white-space: nowrap; }
         .final-label { font-size: 0.75rem; color: #e74c3c; font-weight: bold; display: block; margin-top: 4px; }
-        .rank-tag { font-size: 0.75rem; color: #666; background: #eee; padding: 2px 5px; border-radius: 4px; }
+        .rank-tag { font-size: 0.75rem; color: #666; background: #eee; padding: 2px 5px; border-radius: 4px; margin-bottom: 3px; display: inline-block; }
 
         .btn { padding: 12px 25px; border: none; border-radius: 8px; cursor: pointer; color: white; font-weight: bold; font-size: 1.1rem; transition: 0.2s; }
         
@@ -49,34 +49,39 @@
     <div class="score-container">
         <div style="font-weight:bold; color:var(--primary);">🗓️ 年度績效評分</div>
         <div class="score-grid">
-            <div id="annualInputs" style="display:flex; gap:8px;"></div>
+            <div id="annualInputs" style="display:flex; gap:8px; flex-wrap: wrap;"></div>
             <div class="avg-display">年度平均：<span id="avgSpan">0.00</span></div>
         </div>
     </div>
+
+    <div class="score-container" style="border-left-color: var(--project); background: #ebf5fb;">
+        <div style="font-weight:bold; color:var(--project);">🚀 專案表現評分</div>
+        <div class="score-grid">
+            <div id="projInputs" style="display:flex; gap:8px; flex-wrap: wrap;"></div>
+            <div class="avg-display" style="background:var(--project);">專案平均：<span id="projAvgSpan">0.00</span></div>
+        </div>
+    </div>
     
-    <h2>📊 評分趨勢圖 <button class="download-btn" onclick="downloadChart('scoreChart', '績效分數圖表.jpg')">📸 下載圖表</button></h2>
+    <h2>📊 評分趨勢圖 <button class="download-btn" onclick="downloadChart('scoreChart', '績效分數趨勢.jpg')">📸 下載JPG</button></h2>
     <div style="height:350px;"><canvas id="scoreChart"></canvas></div>
 </div>
 
 <div id="adminZone" style="display:none;">
     <div class="card">
         <h2 style="color:var(--danger); border-left-color:var(--danger)">主管獎金核定</h2>
-        <div style="background:#fcf3cf; padding:12px; border-radius:8px; margin-bottom:15px; font-weight:bold; color:#856404;">
-            💡 提示：修改下方職等或薪資，綠色「試算參考」金額會立即連動更新。
-        </div>
         <table class="timeline-table" style="background:white;">
             <tr style="background:#f4f4f4;"><th>項目</th><th>Q1</th><th>Q2</th><th>Q3</th><th>Q4</th></tr>
             <tr id="tmRankRow"></tr><tr id="tmSalaryRow"></tr>
         </table>
         <table style="width:100%; text-align:center; border-collapse:collapse;">
-            <thead><tr style="background:#f4f4f4; height: 45px;"><th>姓名</th><th>年度</th><th>平均分</th><th>五一</th><th>端午</th><th>中秋</th><th>年終</th><th>專案基數/核定</th><th>總領金額</th></tr></thead>
+            <thead><tr style="background:#f4f4f4; height: 45px;"><th>姓名</th><th>年度</th><th>平均分</th><th>五一</th><th>端午</th><th>中秋</th><th>年終</th><th>專案基數/核定</th><th>總計額</th></tr></thead>
             <tbody id="resultBody"></tbody>
         </table>
         <div style="height:400px; margin-top:20px;"><canvas id="currentYearChart"></canvas></div>
     </div>
 
     <div class="card">
-        <h2>📈 歷年獎金對照 <button class="download-btn" onclick="downloadChart('historyCompareChart', '歷年獎金對照.jpg')">📸 下載圖表</button></h2>
+        <h2>📈 歷年獎金對照 <button class="download-btn" onclick="downloadChart('historyCompareChart', '歷年獎金對照.jpg')">📸 下載JPG</button></h2>
         <div style="height:450px;"><canvas id="historyCompareChart"></canvas></div>
         <div style="height:350px; margin-top:60px;"><canvas id="historyTotalChart"></canvas></div>
     </div>
@@ -90,10 +95,15 @@
     Chart.register(ChartDataLabels);
 
     window.onload = async () => {
-        const res = await fetch(API_URL);
-        const r = await res.json();
-        document.getElementById('selEmp').innerHTML = r.data.map(e => `<option value="${e.name}" data-rank="${e.rank}" data-salary="${e.salary}">${e.name}</option>`).join('');
-        initUI();
+        try {
+            const res = await fetch(API_URL);
+            const r = await res.json();
+            const sel = document.getElementById('selEmp');
+            if (sel) {
+                sel.innerHTML = r.data.map(e => `<option value="${e.name}" data-rank="${e.rank}" data-salary="${e.salary}">${e.name}</option>`).join('');
+                initUI();
+            }
+        } catch (e) { console.error("初始化資料失敗", e); }
     };
 
     function initUI() {
@@ -107,13 +117,15 @@
         for(let i=1; i<=count; i++) {
             h1 += `<div class="input-group"><span class="input-label">${isL1?i+'月':'Q'+i}</span><input type="number" class="q-score ann-in" oninput="localUpdate()"></div>`;
         }
-        document.getElementById('annualInputs').innerHTML = h1;
+        const annualBox = document.getElementById('annualInputs');
+        if (annualBox) annualBox.innerHTML = h1;
 
         let h2 = '';
         for(let i=1; i<=12; i++) {
             h2 += `<div class="input-group"><span class="input-label">${i}月</span><input type="number" class="q-score prj-in" oninput="localUpdate()"></div>`;
         }
-        document.getElementById('projInputs').innerHTML = h2;
+        const projBox = document.getElementById('projInputs');
+        if (projBox) projBox.innerHTML = h2;
 
         timelineData = { Q1:{r:opt.dataset.rank, s:opt.dataset.salary}, Q2:{r:opt.dataset.rank, s:opt.dataset.salary}, Q3:{r:opt.dataset.rank, s:opt.dataset.salary}, Q4:{r:opt.dataset.rank, s:opt.dataset.salary} };
         autoCalc(true); 
@@ -130,8 +142,10 @@
             const vals = Array.from(document.querySelectorAll(cls)).map(i => parseFloat(i.value)).filter(v => !isNaN(v));
             return vals.length > 0 ? (vals.reduce((a,b)=>a+b,0)/vals.length).toFixed(2) : "0.00";
         };
-        document.getElementById('avgSpan').innerText = getAvg('.ann-in');
-        document.getElementById('projAvgSpan').innerText = getAvg('.prj-in');
+        const avgS = document.getElementById('avgSpan');
+        const prjS = document.getElementById('projAvgSpan');
+        if (avgS) avgS.innerText = getAvg('.ann-in');
+        if (prjS) prjS.innerText = getAvg('.prj-in');
         updateScoreChart();
     }
 
@@ -145,30 +159,31 @@
             scores: Array.from(document.querySelectorAll('.ann-in')).map(i => i.value||null), 
             projScores: Array.from(document.querySelectorAll('.prj-in')).map(i => i.value||null), 
             timeline: timelineData, 
-            avgScore: document.getElementById('avgSpan').innerText, 
-            projAvg: document.getElementById('projAvgSpan').innerText 
+            avgScore: document.getElementById('avgSpan')?.innerText || "0.00", 
+            projAvg: document.getElementById('projAvgSpan')?.innerText || "0.00" 
         };
         
-        const res = await fetch(API_URL, { method: "POST", body: JSON.stringify(payload) });
-        const r = await res.json();
-
-        if(r.status === "success") {
-            if(forceSync) {
-                if(r.historyScores) {
-                    const annIn = document.querySelectorAll('.ann-in');
-                    r.historyScores.forEach((v,i) => { if(annIn[i]) annIn[i].value = v; });
+        try {
+            const res = await fetch(API_URL, { method: "POST", body: JSON.stringify(payload) });
+            const r = await res.json();
+            if(r.status === "success") {
+                if(forceSync) {
+                    if(r.historyScores) {
+                        const ann = document.querySelectorAll('.ann-in');
+                        r.historyScores.forEach((v,i) => { if(ann[i]) ann[i].value = v; });
+                    }
+                    if(r.historyProjScores) {
+                        const prj = document.querySelectorAll('.prj-in');
+                        r.historyProjScores.forEach((v,i) => { if(prj[i]) prj[i].value = v; });
+                    }
+                    if(r.historyTimeline) timelineData = r.historyTimeline;
+                    refreshAvgDisplays();
                 }
-                if(r.historyProjScores) {
-                    const prjIn = document.querySelectorAll('.prj-in');
-                    r.historyProjScores.forEach((v,i) => { if(prjIn[i]) prjIn[i].value = v; });
-                }
-                if(r.historyTimeline) timelineData = r.historyTimeline;
-                refreshAvgDisplays();
+                baseResults = r.data;
+                renderTimelineUI();
+                updateAdminTable(r.historyAdjs || [0,0,0,0,80000,0]);
             }
-            baseResults = r.data;
-            renderTimelineUI();
-            updateAdminTable(r.historyAdjs || [0,0,0,0,80000,0]);
-        }
+        } catch(e) { console.error("計算 API 連線失敗", e); }
     }
 
     function updateAdminTable(historyAdjs) {
@@ -177,6 +192,8 @@
         const pCalc = Math.round(parseFloat(adjs[4]) * pMult);
         
         const rb = document.getElementById('resultBody');
+        if (!rb) return;
+
         rb.innerHTML = `<tr>
             <td>${document.getElementById('selEmp').value}</td>
             <td>${document.getElementById('calcYear').value}</td>
@@ -184,7 +201,7 @@
             ${ ['f1','f2','f3','ye'].map((k, i) => {
                 const qKey = i < 3 ? 'Q'+(i+1) : 'Q4';
                 return `<td>
-                    <span class="rank-tag">${timelineData[qKey].r}</span>
+                    <span class="rank-tag">${timelineData[qKey].r}職等</span>
                     <span class="reference-text">試算參考：${(baseResults[k]||0).toLocaleString()}</span>
                     <span class="final-label">最終發放金額:</span>
                     <input type="number" class="target-input" id="target_${k}" value="${Math.round((baseResults[k]||0) + (adjs[i]||0))}" oninput="refreshTotal()">
@@ -205,7 +222,7 @@
         let rH = '<td>職等</td>', sH = '<td>月薪</td>';
         ['Q1','Q2','Q3','Q4'].forEach(q => {
             rH += `<td><select onchange="timelineData['${q}'].r=this.value; autoCalc(false)" style="padding:4px;"><option value="L1">L1</option><option value="L2">L2</option><option value="L3">L3</option><option value="L4">L4</option></select></td>`;
-            sH += `<td><input type="number" value="${timelineData[q].s}" onfocus="isUserTyping=true" onblur="isUserTyping=false; autoCalc(false)" oninput="timelineData['${q}'].s=this.value" style="width:85px; padding:4px;"></td>`;
+            sH += `<td><input type="number" value="${timelineData[q].s}" onfocus="isUserTyping=true" onblur="isUserTyping=false; autoCalc(false)" oninput="timelineData['${q}'].s=this.value" style="width:90px; padding:4px;"></td>`;
         });
         document.getElementById('tmRankRow').innerHTML = rH; 
         document.getElementById('tmSalaryRow').innerHTML = sH;
@@ -213,41 +230,43 @@
     }
 
     async function updateHistoryCharts() {
-        const res = await fetch(API_URL, { method: "POST", body: JSON.stringify({ action: "getHistoryComparison", empName: document.getElementById('selEmp').value }) });
-        const r = await res.json();
-        if(r.status === "success" && r.history.length > 0) {
-            const ctx1 = document.getElementById('historyCompareChart').getContext('2d');
-            if(historyCompareChart) historyCompareChart.destroy();
-            historyCompareChart = new Chart(ctx1, {
-                type: 'bar',
-                data: {
-                    labels: ['五一', '端午', '中秋', '年終', '專案'],
-                    datasets: r.history.map((d, i) => ({
-                        label: d.year + ' 年',
-                        data: [d.f1, d.f2, d.f3, d.ye, d.proj],
-                        backgroundColor: `rgba(52, 152, 219, ${0.4 + (i*0.3)})`,
-                        borderColor: '#2980b9', borderWidth: 1
-                    }))
-                },
-                options: { maintainAspectRatio: false, layout: { padding: { top: 60 } }, plugins: { datalabels: { display: true, anchor: 'end', align: 'top', font: { weight: 'bold' }, formatter: v => v > 0 ? v.toLocaleString() : '' } } }
-            });
+        try {
+            const res = await fetch(API_URL, { method: "POST", body: JSON.stringify({ action: "getHistoryComparison", empName: document.getElementById('selEmp').value }) });
+            const r = await res.json();
+            if(r.status === "success" && r.history && r.history.length > 0) {
+                const ctx1 = document.getElementById('historyCompareChart').getContext('2d');
+                if(historyCompareChart) historyCompareChart.destroy();
+                historyCompareChart = new Chart(ctx1, {
+                    type: 'bar',
+                    data: {
+                        labels: ['五一', '端午', '中秋', '年終', '專案'],
+                        datasets: r.history.map((d, i) => ({
+                            label: d.year + ' 年',
+                            data: [d.f1, d.f2, d.f3, d.ye, d.proj],
+                            backgroundColor: `rgba(52, 152, 219, ${0.4 + (i*0.3)})`,
+                            borderColor: '#2980b9', borderWidth: 1
+                        }))
+                    },
+                    options: { maintainAspectRatio: false, layout: { padding: { top: 60 } }, plugins: { datalabels: { display: true, anchor: 'end', align: 'top', font: { weight: 'bold' }, formatter: v => v > 0 ? v.toLocaleString() : '' } } }
+                });
 
-            const ctx2 = document.getElementById('historyTotalChart').getContext('2d');
-            if(historyTotalChart) historyTotalChart.destroy();
-            historyTotalChart = new Chart(ctx2, {
-                type: 'line',
-                data: {
-                    labels: r.history.map(d => d.year + '年度'),
-                    datasets: [{ label: '實領總額', data: r.history.map(d => d.total), borderColor: '#e67e22', pointRadius: 10, fill: false }]
-                },
-                options: { 
-                    maintainAspectRatio: false, 
-                    layout: { padding: { top: 50, left: 50, right: 50, bottom: 20 } }, 
-                    plugins: { datalabels: { display: true, align: 'top', font: { weight: 'bold', size: 16 }, color: '#d35400', formatter: v => '領：' + v.toLocaleString() } },
-                    scales: { y: { display: false }, x: { ticks: { font: { weight: 'bold' } } } }
-                }
-            });
-        }
+                const ctx2 = document.getElementById('historyTotalChart').getContext('2d');
+                if(historyTotalChart) historyTotalChart.destroy();
+                historyTotalChart = new Chart(ctx2, {
+                    type: 'line',
+                    data: {
+                        labels: r.history.map(d => d.year + '年度'),
+                        datasets: [{ label: '實領總額', data: r.history.map(d => d.total), borderColor: '#e67e22', pointRadius: 10, fill: false }]
+                    },
+                    options: { 
+                        maintainAspectRatio: false, 
+                        layout: { padding: { top: 60, left: 60, right: 60, bottom: 20 } }, 
+                        plugins: { datalabels: { display: true, align: 'top', font: { weight: 'bold', size: 16 }, color: '#d35400', formatter: v => '領：' + v.toLocaleString() } },
+                        scales: { y: { display: false }, x: { ticks: { font: { weight: 'bold', size: 14 } } } }
+                    }
+                });
+            }
+        } catch (e) { console.error("歷史資料載入失敗", e); }
     }
 
     function downloadChart(chartId, filename) {
@@ -264,7 +283,8 @@
             const el = document.getElementById('target_' + k);
             if (el) t += parseFloat(el.value) || 0;
         });
-        document.getElementById('totalCell').innerText = t.toLocaleString();
+        const tc = document.getElementById('totalCell');
+        if (tc) tc.innerText = t.toLocaleString();
         if (document.getElementById('adminZone').style.display === 'block') updateAdminCharts();
     }
 
@@ -275,7 +295,7 @@
         let annMapped = annRaw.length === 4 ? [{x:3,y:annRaw[0]},{x:6,y:annRaw[1]},{x:9,y:annRaw[2]},{x:12,y:annRaw[3]}] : annRaw.map((v,i)=>({x:i+1,y:v}));
         scoreChart = new Chart(ctx, {
             type: 'line',
-            data: { datasets: [{ label: '年度評分', data: annMapped, borderColor: '#3498db', backgroundColor:'white' }, { label: '專案評分', data: Array.from(document.querySelectorAll('.prj-in')).map((i,idx)=>({x:idx+1,y:parseFloat(i.value)})), borderColor: '#e67e22', borderDash:[5,5] }]},
+            data: { datasets: [{ label: '年度評分', data: annMapped, borderColor: '#3498db', backgroundColor:'white', tension: 0.15 }, { label: '專案評分', data: Array.from(document.querySelectorAll('.prj-in')).map((i,idx)=>({x:idx+1,y:parseFloat(i.value)})), borderColor: '#e67e22', borderDash:[5,5], tension: 0.15 }]},
             options: { maintainAspectRatio: false, scales: { x: { type: 'linear', min:1, max:12, ticks:{stepSize:1} } }, plugins: { datalabels: { display: true, align:'top', formatter: v => v.y || '' } } }
         });
     }
@@ -298,7 +318,8 @@
             timeline: timelineData
         };
         const res = await fetch(API_URL, { method: "POST", body: JSON.stringify(data) });
-        if((await res.json()).status === "success") { alert("✅ 存檔成功！"); updateHistoryCharts(); }
+        const r = await res.json();
+        if(r.status === "success") { alert("✅ 資料存檔成功！"); updateHistoryCharts(); }
     }
 
     async function askPassword() {
