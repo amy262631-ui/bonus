@@ -41,7 +41,7 @@
     <div class="header-controls">
         <span>👤 人員：</span><select id="selEmp" onchange="initUI()"></select>
         <span>📅 年度：</span><input type="number" id="calcYear" value="2025" onchange="autoCalc(true)">
-        <button class="btn" style="background:var(--danger); margin-left:auto;" onclick="askPassword()">🔒 主管解鎖 (核定/存檔)</button>
+        <button class="btn" style="background:var(--danger); margin-left:auto;" onclick="askPassword()">🔒 主管解鎖</button>
     </div>
 
     <div class="score-container">
@@ -49,24 +49,30 @@
         <div id="annualInputs" class="score-grid"></div>
         <div class="avg-display" style="margin-top:10px;">年度平均：<span id="avgSpan">0.00</span></div>
     </div>
+
+    <div class="score-container" style="border-left-color: var(--project); background: #ebf5fb;">
+        <div style="font-weight:bold; color:var(--project);">🚀 專案表現評分</div>
+        <div id="projInputs" class="score-grid"></div>
+        <div class="avg-display" style="background:var(--project); margin-top:10px;">專案平均：<span id="projAvgSpan">0.00</span></div>
+    </div>
     
-    <h2>📊 評分趨勢圖 <button class="download-btn" onclick="downloadChart('scoreChart', '績效分數圖表')">📸 下載JPG</button></h2>
+    <h2>📊 評分趨勢圖 <button class="download-btn" onclick="downloadChart('scoreChart', '評分趨勢圖')">📸 下載圖表</button></h2>
     <div style="height:350px;"><canvas id="scoreChart"></canvas></div>
 </div>
 
 <div id="adminZone" style="display:none;">
     <div class="card" style="border: 2px solid var(--danger);">
-        <h2 style="color:var(--danger); border-left-color:var(--danger)">主管獎金核定 (修改後請務必按下方存檔)</h2>
+        <h2 style="color:var(--danger); border-left-color:var(--danger)">主管獎金核定</h2>
         <table class="timeline-table" style="background:white;">
             <tr style="background:#f4f4f4;"><th>項目</th><th>Q1</th><th>Q2</th><th>Q3</th><th>Q4</th></tr>
             <tr id="tmRankRow"></tr><tr id="tmSalaryRow"></tr>
         </table>
         <table style="width:100%; text-align:center; border-collapse:collapse;">
-            <thead><tr style="background:#f4f4f4; height: 45px;"><th>姓名</th><th>年度</th><th>平均分</th><th>五一</th><th>端午</th><th>中秋</th><th>年終</th><th>專案基數/核定</th><th>總計額</th></tr></thead>
+            <thead><tr style="background:#f4f4f4; height: 45px;"><th>姓名</th><th>年度</th><th>平均分</th><th>五一</th><th>端午</th><th>中秋</th><th>年終</th><th>專案基數/核定</th><th>總額</th></tr></thead>
             <tbody id="resultBody"></tbody>
         </table>
         <div style="text-align:center; margin-top:30px;">
-            <button class="btn" style="background:var(--success); padding: 15px 60px; font-size: 1.5rem;" onclick="handleFinalSave()">💾 確認核定並儲存資料</button>
+            <button class="btn" style="background:var(--success); padding: 15px 60px; font-size: 1.5rem;" onclick="handleFinalSave()">💾 確認核定並存檔</button>
         </div>
     </div>
 
@@ -80,13 +86,15 @@
 <script>
     const API_URL = "https://script.google.com/macros/s/AKfycbz9kLPJjKS5XZsYmgy_Hk77YKKL7X_8qIJkQrNGyJLEcGb3XKrb0lotAjcNhRCL5EXB/exec"; 
     let scoreChart=null, currentYearChart=null, historyCompareChart=null, historyTotalChart=null, timelineData={}, baseResults={};
-    let isUserTyping = false;
+    let isUserTyping = false; 
+
     Chart.register(ChartDataLabels);
 
     window.onload = async () => {
         const res = await fetch(API_URL);
         const r = await res.json();
-        document.getElementById('selEmp').innerHTML = r.data.map(e => `<option value="${e.name}" data-rank="${e.rank}" data-salary="${e.salary}">${e.name}</option>`).join('');
+        const sel = document.getElementById('selEmp');
+        sel.innerHTML = r.data.map(e => `<option value="${e.name}" data-rank="${e.rank}" data-salary="${e.salary}">${e.name}</option>`).join('');
         initUI();
     };
 
@@ -174,33 +182,32 @@
         document.querySelectorAll('#tmRankRow select').forEach((s,i) => s.value = timelineData['Q'+(i+1)].r);
     }
 
-    function downloadChart(chartId, baseName) {
+    function downloadChart(chartId, title) {
         const canvas = document.getElementById(chartId);
-        const ctx = canvas.getContext('2d');
         const year = document.getElementById('calcYear').value;
         const name = document.getElementById('selEmp').value;
         
-        // 建立一個臨時畫布來加上標題
+        // 建立臨時畫布來繪製標題與內容
         const tempCanvas = document.createElement('canvas');
         const tempCtx = tempCanvas.getContext('2d');
         tempCanvas.width = canvas.width;
-        tempCanvas.height = canvas.height + 60; // 增加空間放標題
+        tempCanvas.height = canvas.height + 80;
         
         tempCtx.fillStyle = "white";
         tempCtx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
         
-        // 寫入標題：年度 + 姓名
+        // 繪製動態標題
         tempCtx.fillStyle = "black";
-        tempCtx.font = "bold 24px Microsoft JhengHei";
+        tempCtx.font = "bold 26px Microsoft JhengHei";
         tempCtx.textAlign = "center";
-        tempCtx.fillText(`${year}年度 - ${name} (${baseName})`, tempCanvas.width / 2, 40);
+        tempCtx.fillText(`${year}年度 - ${name} (${title})`, tempCanvas.width / 2, 45);
         
-        // 把原圖畫進去
-        tempCtx.drawImage(canvas, 0, 60);
+        // 貼上原始圖表
+        tempCtx.drawImage(canvas, 0, 80);
         
         const link = document.createElement('a');
         link.href = tempCanvas.toDataURL('image/jpeg', 0.9);
-        link.download = `${year}_${name}_${baseName}.jpg`;
+        link.download = `${year}_${name}_${title}.jpg`;
         link.click();
     }
 
@@ -221,7 +228,7 @@
                         borderColor: '#2980b9', borderWidth: 1
                     }))
                 },
-                options: { maintainAspectRatio: false, layout: { padding: { top: 60 } }, plugins: { datalabels: { display: true, anchor: 'end', align: 'top', font: { weight: 'bold' }, formatter: v => v > 0 ? v.toLocaleString() : '' } } }
+                options: { maintainAspectRatio: false, layout: { padding: { top: 70 } }, plugins: { datalabels: { display: true, anchor: 'end', align: 'top', font: { weight: 'bold' }, formatter: v => v > 0 ? v.toLocaleString() : '' } } }
             });
 
             const ctx2 = document.getElementById('historyTotalChart').getContext('2d');
@@ -241,8 +248,7 @@
             });
         }
     }
-    
-    // (其餘 refreshTotal, updateScoreChart, askPassword, handleFinalSave, localUpdate, refreshAvgDisplays 邏輯保持不變但補齊 ID 呼叫)
+
     function refreshTotal() {
         let t = 0;
         ['f1', 'f2', 'f3', 'ye', 'proj'].forEach(k => {
@@ -251,7 +257,7 @@
         });
         document.getElementById('totalCell').innerText = t.toLocaleString();
     }
-    
+
     function updateScoreChart() {
         const ctx = document.getElementById('scoreChart').getContext('2d');
         if (scoreChart) scoreChart.destroy();
