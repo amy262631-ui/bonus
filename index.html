@@ -32,7 +32,7 @@
 <div class="card">
     <div class="header-controls">
         <span>👤 人員：</span><select id="selEmp" onchange="initUI()"></select>
-        <span>📅 年度：</span><input type="number" id="calcYear" value="2024" onchange="autoCalc(true)">
+        <span>📅 年度：</span><input type="number" id="calcYear" value="2025" onchange="autoCalc(true)">
         <button class="btn" style="background:var(--accent);" onclick="handleFinalSave()">💾 存檔</button>
         <button class="btn" style="background:var(--danger); margin-left:auto;" onclick="askPassword()">🔒 主管解鎖 (核定/歷年)</button>
     </div>
@@ -44,41 +44,29 @@
             <div class="avg-display">年度平均：<span id="avgSpan">0.00</span></div>
         </div>
     </div>
-
-    <div class="score-container" style="border-left-color: var(--project); background: #ebf5fb;">
-        <div style="font-weight:bold; color:var(--project);">🚀 專案表現評分</div>
-        <div class="score-grid">
-            <div id="projInputs" style="display:flex; gap:8px;"></div>
-            <div class="avg-display" style="background:var(--project);">專案平均：<span id="projAvgSpan">0.00</span></div>
-        </div>
-    </div>
     
-    <h2>📊 評分趨勢圖 <button class="download-btn" onclick="downloadChart('scoreChart', '績效分數圖表.jpg')">📸 下載JPG</button></h2>
+    <h2>📊 評分趨勢圖 <button class="download-btn" onclick="downloadChart('scoreChart', '績效分數趨勢.jpg')">📸 下載JPG</button></h2>
     <div style="height:350px;"><canvas id="scoreChart"></canvas></div>
 </div>
 
 <div id="adminZone" style="display:none;">
     <div class="card">
         <h2 style="color:var(--danger); border-left-color:var(--danger)">主管獎金核定</h2>
-        <div style="background:#eee; padding:15px; border-radius:10px; margin-bottom:20px;">
-            <p style="color:#c0392b; font-weight:bold;">⚠️ 調整薪資後，系統將採用最新薪資重新試算年終獎金。</p>
-            <table class="timeline-table" style="background:white;">
-                <tr style="background:#f4f4f4;"><th>項目</th><th>Q1</th><th>Q2</th><th>Q3</th><th>Q4</th></tr>
-                <tr id="tmRankRow"></tr><tr id="tmSalaryRow"></tr>
-            </table>
-        </div>
+        <table class="timeline-table" style="background:white;">
+            <tr style="background:#f4f4f4;"><th>項目</th><th>Q1</th><th>Q2</th><th>Q3</th><th>Q4</th></tr>
+            <tr id="tmRankRow"></tr><tr id="tmSalaryRow"></tr>
+        </table>
         <table style="width:100%; text-align:center; border-collapse:collapse; font-size:1.1rem;">
             <thead><tr style="background:#f4f4f4;"><th>姓名</th><th>年度</th><th>平均分</th><th>五一</th><th>端午</th><th>中秋</th><th>年終</th><th>專案基數/核定</th><th>總計</th></tr></thead>
             <tbody id="resultBody"></tbody>
         </table>
         <div style="height:400px; margin-top:20px;"><canvas id="currentYearChart"></canvas></div>
-        <div style="text-align:right; margin-top:20px;"><button onclick="handleFinalSave()" class="btn" style="background:var(--success); padding: 15px 50px; font-size:1.4rem;">✅ 確認核定並送出</button></div>
     </div>
 
     <div class="card">
-        <h2 style="color:var(--primary)">📈 歷年獎金對照 <button class="download-btn" onclick="downloadChart('historyCompareChart', '歷年獎金對照圖.jpg')">📸 下載JPG</button></h2>
-        <div style="height:450px;"><canvas id="historyCompareChart"></canvas></div>
-        <div style="height:300px; margin-top:40px;"><canvas id="historyTotalChart"></canvas></div>
+        <h2>📈 歷年獎金對照 <button class="download-btn" onclick="downloadChart('historyCompareChart', '歷年獎金對照.jpg')">📸 下載JPG</button></h2>
+        <div style="height:500px; padding-top: 20px;"><canvas id="historyCompareChart"></canvas></div>
+        <div style="height:350px; margin-top:60px;"><canvas id="historyTotalChart"></canvas></div>
     </div>
 </div>
 
@@ -222,15 +210,30 @@
                 options: { maintainAspectRatio: false, layout: { padding: { top: 65 } }, plugins: { datalabels: { display: true, anchor: 'end', align: 'top', font: { weight: 'bold' }, color: '#c0392b', formatter: (v) => v > 0 ? v.toLocaleString() : '' } } }
             });
 
+            // 2. 優化折線圖 (解決 2023-2025 擁擠問題)
             const ctx2 = document.getElementById('historyTotalChart').getContext('2d');
             if(historyTotalChart) historyTotalChart.destroy();
             historyTotalChart = new Chart(ctx2, {
                 type: 'line',
                 data: {
                     labels: r.history.map(d => d.year + '年度'),
-                    datasets: [{ label: '總額', data: r.history.map(d => d.total), borderColor: '#e67e22', pointRadius: 8, fill: false }]
+                    datasets: [{ label: '總額', data: r.history.map(d => d.total), borderColor: '#e67e22', pointRadius: 10, fill: false }]
                 },
-                options: { maintainAspectRatio: false, layout: { padding: { top: 40, right: 40 } }, plugins: { datalabels: { display: true, align: 'top', font: { weight: 'bold', size: 14 }, color: '#d35400', formatter: v => '領：' + v.toLocaleString() } } }
+                options: {
+                    maintainAspectRatio: false,
+                    layout: { padding: { top: 60, left: 50, right: 50, bottom: 30 } }, // 加大左右邊距
+                    plugins: {
+                        datalabels: {
+                            display: true, align: 'top', offset: 15,
+                            font: { weight: 'bold', size: 16 }, color: '#d35400',
+                            formatter: v => '領：' + v.toLocaleString()
+                        }
+                    },
+                    scales: {
+                        x: { ticks: { font: { size: 14, weight: 'bold' }, padding: 10 } },
+                        y: { display: false } // 隱藏 Y 軸讓視覺更水平開闊
+                    }
+                }
             });
         }
     }
