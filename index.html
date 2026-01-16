@@ -13,28 +13,30 @@
         #selEmp, #calcYear { padding: 8px 15px; font-size: 1.1rem; border-radius: 8px; border: 1px solid #ccc; }
         .score-container { display: flex; flex-direction: column; gap: 10px; padding: 15px; background: #f8f9fa; border-radius: 10px; border-left: 8px solid var(--primary); margin-bottom: 15px; }
         .score-grid { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; }
-        .input-group { display: flex; flex-direction: column; align-items: center; gap: 4px; }
         .q-score { width: 55px; height: 35px; text-align: center; font-size: 1.1rem; border: 2px solid #ddd; border-radius: 6px; }
         .avg-display { min-width: 150px; background: var(--primary); color: white; padding: 10px; border-radius: 8px; text-align: center; margin-left: auto; font-size: 1.1rem; font-weight: bold; }
+        
+        /* 核心表格樣式 */
         .target-input { width: 100px; height: 40px; color: var(--danger); font-size: 1.3rem; border: 2px solid var(--danger); text-align: center; font-weight: bold; background: #fff5f5; border-radius: 6px; }
         .reference-text { color: #27ae60; font-weight: bold; font-size: 0.9rem; display: block; margin-bottom: 2px; }
         .final-label { font-size: 0.75rem; color: #e74c3c; font-weight: bold; display: block; }
-        .btn { padding: 10px 20px; border: none; border-radius: 8px; cursor: pointer; color: white; font-weight: bold; transition: 0.2s; display: flex; align-items: center; gap: 5px; }
+        .btn { padding: 10px 20px; border: none; border-radius: 8px; cursor: pointer; color: white; font-weight: bold; display: flex; align-items: center; gap: 5px; }
+        
         .timeline-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
         .timeline-table th, .timeline-table td { border: 1px solid #ddd; padding: 10px; text-align: center; }
         .total-cell { font-size: 2.2rem; font-weight: bold; background: #fff3cd; color: #d35400; min-width: 140px; }
         h2 { border-left: 8px solid var(--accent); padding-left: 15px; display: flex; justify-content: space-between; align-items: center; margin-top: 25px; }
         .download-btn { background: #7f8c8d; padding: 5px 10px; font-size: 0.8rem; border-radius: 5px; color: white; border: none; cursor: pointer; }
 
-        /* 列印優化：確保所有內容在報表中顯示 */
+        /* 列印模式完全修復 */
         @media print {
             body { background: white; padding: 0; }
-            .btn, .header-controls, .download-btn, select, input.q-score { display: none !important; }
+            .btn, .header-controls, .download-btn, select, .q-score { display: none !important; }
             .card { box-shadow: none; border: 1px solid #eee; margin: 10px 0; page-break-inside: avoid; }
             #adminZone { display: block !important; }
             .target-input { border: none !important; background: none !important; color: black !important; font-size: 1.3rem !important; }
-            canvas { max-width: 100% !important; height: auto !important; }
-            .score-grid { display: flex !important; } /* 確保分數在列印時不消失 */
+            input[type="number"] { border: none !important; }
+            .timeline-table select { appearance: none; -webkit-appearance: none; border: none; font-size: 1.1rem; font-weight: bold; }
         }
     </style>
 </head>
@@ -45,7 +47,7 @@
         <span>👤 人員：</span><select id="selEmp" onchange="initUI()"></select>
         <span>📅 年度：</span><input type="number" id="calcYear" value="2025" onchange="autoCalc(true)">
         <button class="btn" style="background:var(--success);" onclick="handleFinalSave()">💾 儲存數據</button>
-        <button class="btn" style="background:var(--accent);" onclick="prepareAndPrint()">🖨️ 列印完整報表</button>
+        <button class="btn" style="background:var(--accent);" onclick="window.print()">🖨️ 列印完整報表</button>
         <button id="unlockBtn" class="btn" style="background:var(--danger); margin-left:auto;" onclick="askPassword()">🔒 主管解鎖</button>
     </div>
 
@@ -61,7 +63,7 @@
         <div class="avg-display" style="background:var(--project);">專案平均：<span id="projAvgSpan">0.00</span></div>
     </div>
     
-    <h2>📊 綜合評分趨勢圖 <button class="download-btn" onclick="downloadChart('scoreChart', '趨勢圖')">📸 下載圖表</button></h2>
+    <h2>📊 綜合評分趨勢圖 (年度 vs 專案) <button class="download-btn" onclick="downloadChart('scoreChart', '評分趨勢圖')">📸 下載圖表</button></h2>
     <div style="height:350px;"><canvas id="scoreChart"></canvas></div>
 </div>
 
@@ -76,13 +78,11 @@
             <thead><tr style="background:#f4f4f4; height: 45px;"><th>姓名</th><th>年度</th><th>平均分</th><th>五一</th><th>端午</th><th>中秋</th><th>年終</th><th>專案基數/核定</th><th>總金額</th></tr></thead>
             <tbody id="resultBody"></tbody>
         </table>
-        <div style="text-align:center; margin-top:20px;">
-            <button class="btn" style="background:var(--success); padding: 12px 60px; font-size:1.3rem; margin: 0 auto;" onclick="handleFinalSave()">💾 確認並存檔</button>
-        </div>
+        <div style="text-align:center; margin-top:20px;"><button class="btn" style="background:var(--success); padding: 12px 60px; font-size:1.3rem; margin: 0 auto;" onclick="handleFinalSave()">💾 確認並存檔數據</button></div>
     </div>
 
     <div class="card">
-        <h2>📈 歷年獎金對照 <button class="download-btn" onclick="downloadChart('historyCompareChart', '對照圖')">📸 下載JPG</button></h2>
+        <h2>📈 歷年獎金對照 <button class="download-btn" onclick="downloadChart('historyCompareChart', '歷年獎金對照')">📸 下載JPG</button></h2>
         <div style="height:400px;"><canvas id="historyCompareChart"></canvas></div>
         <div style="height:300px; margin-top:50px;"><canvas id="historyTotalChart"></canvas></div>
     </div>
@@ -99,6 +99,7 @@
         const r = await res.json();
         const sel = document.getElementById('selEmp');
         sel.innerHTML = r.data.map(e => `<option value="${e.name}" data-rank="${e.rank}" data-salary="${e.salary}">${e.name}</option>`).join('');
+        
         if(sessionStorage.getItem('isAdminUnlocked') === 'true') {
             document.getElementById('adminZone').style.display = 'block';
             document.getElementById('unlockBtn').innerText = "🔓 已授權";
@@ -115,6 +116,7 @@
         for(let i=1; i<=12; i++) h2 += `<div class="input-group"><span style="font-size:0.7rem">${i}月</span><input type="number" class="q-score prj-in" oninput="localUpdate()"></div>`;
         document.getElementById('annualInputs').innerHTML = h1;
         document.getElementById('projInputs').innerHTML = h2;
+        
         timelineData = { Q1:{r:opt.dataset.rank, s:opt.dataset.salary}, Q2:{r:opt.dataset.rank, s:opt.dataset.salary}, Q3:{r:opt.dataset.rank, s:opt.dataset.salary}, Q4:{r:opt.dataset.rank, s:opt.dataset.salary} };
         autoCalc(true); 
     }
@@ -188,12 +190,6 @@
         document.querySelectorAll('#tmRankRow select').forEach((s,i) => s.value = timelineData['Q'+(i+1)].r);
     }
 
-    function prepareAndPrint() {
-        // 強制執行一次計算，確保數據是最新的
-        refreshTotal();
-        window.print();
-    }
-
     function downloadChart(chartId, bName) {
         const canvas = document.getElementById(chartId);
         const year = document.getElementById('calcYear').value;
@@ -264,7 +260,7 @@
             projScores: Array.from(document.querySelectorAll('.prj-in')).map(i => i.value||null), timeline: timelineData
         };
         const res = await fetch(API_URL, { method: "POST", body: JSON.stringify(data) });
-        if((await res.json()).status === "success") { alert("✅ 存檔成功！"); updateHistoryCharts(); }
+        if((await res.json()).status === "success") { alert("✅ 儲存成功！"); updateHistoryCharts(); }
     }
 
     async function askPassword() {
