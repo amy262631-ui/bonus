@@ -44,6 +44,9 @@
     <div class="header-controls">
         <span>👤 人員：</span><select id="selEmp" onchange="initUI()"></select>
         <span>📅 年度：</span><input type="number" id="calcYear" value="2025" onchange="autoCalc(true)">
+        
+        <button class="btn" style="background:var(--success);" onclick="handleFinalSave()">💾 儲存數據</button>
+        
         <button class="btn" style="background:var(--danger); margin-left:auto;" onclick="askPassword()">🔒 主管解鎖 (核定/存檔)</button>
     </div>
 
@@ -59,7 +62,7 @@
         <div class="avg-display" style="background:var(--project); margin-top:10px;">專案平均：<span id="projAvgSpan">0.00</span></div>
     </div>
     
-    <h2>📊 評分趨勢圖 <button class="download-btn" onclick="downloadChart('scoreChart', '績效分數趨勢')">📸 下載JPG</button></h2>
+    <h2>📊 評分趨勢圖 <button class="download-btn" onclick="downloadChart('scoreChart', '績效分數圖表')">📸 下載JPG</button></h2>
     <div style="height:350px;"><canvas id="scoreChart"></canvas></div>
 </div>
 
@@ -191,7 +194,7 @@
         document.querySelectorAll('#tmRankRow select').forEach((s,i) => s.value = timelineData['Q'+(i+1)].r);
     }
 
-    // 下載圖片包含：年度 + 姓名 + 圖表標題
+    // 修正 2：下載圖片包含：年度 + 姓名 + 圖表標題
     function downloadChart(chartId, baseName) {
         const canvas = document.getElementById(chartId);
         const year = document.getElementById('calcYear').value;
