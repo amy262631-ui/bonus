@@ -407,40 +407,72 @@ historyCompareChart = new Chart(ctx1, {
     // 根據模式決定 API 參數
     const payload = mode === 'all' ? { action: "getHistoryComparison" } : { action: "getHistoryComparison", empName: name };
     
-    const res = await fetch(API_URL, { method: "POST", body: JSON.stringify(payload) });
-    const r = await res.json();
-    
-    if (mode === 'all') {
-        // --- 1. 全體總表邏輯 (升序排序：2023 在上，2025 在下) ---
-        const grouped = r.history.reduce((acc, curr) => {
-            if (!acc[curr.year]) acc[curr.year] = [];
-            acc[curr.year].push(curr);
-            return acc;
-        }, {});
+    try {
+        const res = await fetch(API_URL, { method: "POST", body: JSON.stringify(payload) });
+        const r = await res.json();
         
-        const sortedYears = Object.keys(grouped).sort((a, b) => a - b);
-        let fullHtml = "";
+        if (mode === 'all') {
+            // --- 1. 全體總表模式 ---
+            const grouped = r.history.reduce((acc, curr) => {
+                if (!acc[curr.year]) acc[curr.year] = [];
+                acc[curr.year].push(curr);
+                return acc;
+            }, {});
+            
+            const sortedYears = Object.keys(grouped).sort((a, b) => a - b);
+            let fullHtml = "";
 
-        for (let i = 0; i < sortedYears.length; i += 3) {
-            const pageYears = sortedYears.slice(i, i + 3);
-            fullHtml += `<div class="report-page">`;
-            pageYears.forEach(year => {
-                fullHtml += `
-                <h2 style="text-align:center; margin: 10px 0;">${year} 年度全體獎金總結表</h2>
+            for (let i = 0; i < sortedYears.length; i += 3) {
+                const pageYears = sortedYears.slice(i, i + 3);
+                fullHtml += `<div class="report-page">`;
+                pageYears.forEach(year => {
+                    fullHtml += `
+                    <h2 style="text-align:center; margin: 10px 0;">${year} 年度全體獎金總結表</h2>
+                    <table class="excel-report">
+                        <thead>
+                            <tr>
+                                <th style="width:15%;">姓名</th>
+                                <th style="width:10%;">五一</th><th style="width:10%;">端午</th><th style="width:10%;">中秋</th>
+                                <th style="width:10%;">年終</th><th style="width:10%;">專案</th>
+                                <th style="width:12%;">總計</th>
+                                <th style="width:23%;">調整/備註 (空白手寫)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${grouped[year].map(h => `
+                                <tr>
+                                    <td>${h.empName}</td>
+                                    <td>${h.f1.toLocaleString()}</td><td>${h.f2.toLocaleString()}</td><td>${h.f3.toLocaleString()}</td>
+                                    <td>${h.ye.toLocaleString()}</td><td>${h.proj.toLocaleString()}</td>
+                                    <td style="font-weight:bold;">${h.total.toLocaleString()}</td>
+                                    <td></td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>`;
+                });
+                fullHtml += `</div>`;
+            }
+            inner.innerHTML = fullHtml;
+
+        } else {
+            // --- 2. 個人報表模式 ---
+            let html = `
+            <div class="report-page">
+                <h2 style="text-align:center; margin-bottom: 20px;">${name} - 歷年獎金績效明細報告</h2>
                 <table class="excel-report">
                     <thead>
                         <tr>
-                            <th style="width:15%;">姓名</th>
-                            <th style="width:10%;">五一</th><th style="width:10%;">端午</th><th style="width:10%;">中秋</th>
-                            <th style="width:10%;">年終</th><th style="width:10%;">專案</th>
-                            <th style="width:12%;">總計</th>
-                            <th style="width:23%;">調整/備註 (空白手寫)</th>
+                            <th style="width:15%;">年度</th>
+                            <th>五一</th><th>端午</th><th>中秋</th><th>年終</th><th>專案</th>
+                            <th style="width:15%;">總計</th>
+                            <th style="width:20%;">手寫備註</th>
                         </tr>
                     </thead>
                     <tbody>
-                        ${grouped[year].map(h => `
+                        ${r.history.sort((a,b)=>a.year-b.year).map(h => `
                             <tr>
-                                <td>${h.empName}</td>
+                                <td style="text-align:center;">${h.year}</td>
                                 <td>${h.f1.toLocaleString()}</td><td>${h.f2.toLocaleString()}</td><td>${h.f3.toLocaleString()}</td>
                                 <td>${h.ye.toLocaleString()}</td><td>${h.proj.toLocaleString()}</td>
                                 <td style="font-weight:bold;">${h.total.toLocaleString()}</td>
@@ -448,59 +480,32 @@ historyCompareChart = new Chart(ctx1, {
                             </tr>
                         `).join('')}
                     </tbody>
-                </table>`;
-            });
-            fullHtml += `</div>`;
-        }
-        inner.innerHTML = fullHtml;
-
-    } else {
-        // --- 2. 個人報表邏輯 (標題包含姓名，表格首欄改為年度) ---
-        let html = `
-        <div class="report-page">
-            <h2 style="text-align:center; margin-bottom: 20px;">${name} - 歷年獎金績效明細報告</h2>
-            <table class="excel-report">
-                <thead>
-                    <tr>
-                        <th style="width:15%;">年度</th>
-                        <th>五一</th><th>端午</th><th>中秋</th><th>年終</th><th>專案</th>
-                        <th style="width:15%;">總計</th>
-                        <th style="width:20%;">手寫備註</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    ${r.history.sort((a,b)=>a.year-b.year).map(h => `
-                        <tr>
-                            <td style="text-align:center;">${h.year}</td>
-                            <td>${h.f1.toLocaleString()}</td><td>${h.f2.toLocaleString()}</td><td>${h.f3.toLocaleString()}</td>
-                            <td>${h.ye.toLocaleString()}</td><td>${h.proj.toLocaleString()}</td>
-                            <td style="font-weight:bold;">${h.total.toLocaleString()}</td>
-                            <td></td>
-                        </tr>
-                    `).join('')}
-                </tbody>
-            </table>
+                </table>
+                
+                <div class="report-charts" style="margin-top: 40px; display: flex; flex-direction: column; gap: 50px;">
+                    <div class="chart-box">
+                        <h3 style="font-size:1.1rem; margin-bottom:10px;">🏆 歷年獎金組成分析 (長條圖)</h3>
+                        <canvas id="printBarChart"></canvas>
+                    </div>
+                    <div class="chart-box">
+                        <h3 style="font-size:1.1rem; margin-bottom:10px;">📈 歷年總獎金趨勢 (折線圖)</h3>
+                        <canvas id="printLineChart"></canvas>
+                    </div>
+                </div>
+            </div>`;
             
-            <div class="report-charts" style="margin-top: 40px; display: flex; flex-direction: column; gap: 50px;">
-                <div class="chart-box">
-                    <h3 style="font-size:1.1rem; margin-bottom:10px;">🏆 歷年獎金組成分析 (長條圖)</h3>
-                    <canvas id="printBarChart"></canvas>
-                </div>
-                <div class="chart-box">
-                    <h3 style="font-size:1.1rem; margin-bottom:10px;">📈 歷年總獎金趨勢 (折線圖)</h3>
-                    <canvas id="printLineChart"></canvas>
-                </div>
-            </div>
-        </div>`;
-        
-        inner.innerHTML = html;
+            inner.innerHTML = html;
 
-        // 確保在視窗彈出後渲染圖表
-        setTimeout(() => {
-            renderReportCharts(r.history);
-        }, 500);
+            // 確保內容渲染後再繪製圖表
+            setTimeout(() => {
+                renderReportCharts(r.history);
+            }, 500);
+        }
+        document.getElementById('reportModal').style.display = 'block';
+    } catch (err) {
+        console.error("報表生成錯誤:", err);
+        alert("無法讀取報表資料，請確認網路連線或後端部署。");
     }
-    document.getElementById('reportModal').style.display = 'block';
 }
 
 function renderReportCharts(data) {
@@ -513,7 +518,7 @@ function renderReportCharts(data) {
     const sortedData = data.sort((a,b) => a.year - b.year);
     const labels = sortedData.map(d => d.year + "年");
 
-    // 長條圖：取消堆疊，移出 Legend 防止遮擋金額
+    // 長條圖
     new Chart(ctxBar, {
         type: 'bar',
         data: {
@@ -536,7 +541,7 @@ function renderReportCharts(data) {
         }
     });
 
-    // 折線圖：點對點搭接趨勢
+    // 折線圖
     new Chart(ctxLine, {
         type: 'line',
         data: {
