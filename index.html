@@ -247,89 +247,123 @@
    let historyTrendChart = null; // 在最上方定義變數，防止重複渲染
 
 async function updateHistoryCharts() {
-    const res = await fetch(API_URL, { method: "POST", body: JSON.stringify({ action: "getHistoryComparison", empName: document.getElementById('selEmp').value }) });
+    const res = await fetch(API_URL, { 
+        method: "POST", 
+        body: JSON.stringify({ action: "getHistoryComparison", empName: document.getElementById('selEmp').value }) 
+    });
     const r = await res.json();
     
     if(r.status === "success" && r.history.length > 0) {
         const sortedHistory = r.history.sort((a, b) => a.year - b.year);
         const labels = sortedHistory.map(d => d.year + '年');
-
-        // --- 1. 雙色長條圖 (試算 vs 加給) ---
         const ctx1 = document.getElementById('historyCompareChart').getContext('2d');
         if(historyCompareChart) historyCompareChart.destroy();
+
+        // 定義每一種獎金的數據集
+        const datasets = [];
+        const bonusTypes = [
+            { key: 'f1', label: '五一', base: 'f1_base', color: { blue: '#3498db', red: '#e74c3c' } },
+            { key: 'f2', label: '端午', base: 'f2_base', color: { blue: '#2980b9', red: '#c0392b' } },
+            { key: 'f3', label: '中秋', base: 'f3_base', color: { blue: '#1f618d', red: '#943126' } },
+            { key: 'ye', label: '年終', base: 'ye_base', color: { blue: '#27ae60', red: '#219150' } }
+        ];
+
+        bonusTypes.forEach(type => {
+            // 1. 藍色部分：原始試算底碼
+            datasets.push({
+                label: `${type.label}(試算)`,
+                data: sortedHistory.map(d => Number(d[type.base] || 0)),
+                backgroundColor: type.color.blue,
+                stack: 'Stack 0' // 全部疊在同一根柱子
+            });
+            // 2. 紅色部分：加碼的差額 (定案 - 試算)
+            datasets.push({
+                label: `${type.label}(加碼)`,
+                data: sortedHistory.map(d => {
+                    const diff = Number(d[type.key] || 0) - Number(d[type.base] || 0);
+                    return diff > 0 ? diff : 0; // 若沒加碼則不顯示
+                }),
+                backgroundColor: type.color.red,
+                stack: 'Stack 0'
+            });
+        });
+
+        // 3. 專案獎金單獨一塊 (通常沒有試算底碼，直接顯示)
+        datasets.push({
+            label: '專案獎金',
+            data: sortedHistory.map(d => Number(d.proj || 0)),
+            backgroundColor: '#e67e22',
+            stack: 'Stack 0'
+        });
+
         historyCompareChart = new Chart(ctx1, {
             type: 'bar',
-            data: {
-                labels: labels,
-                datasets: [
-                    {
-                        label: '試算參考 (底碼)',
-                        data: sortedHistory.map(d => parseFloat(d.f1_base || 0) + parseFloat(d.f2_base || 0) + parseFloat(d.f3_base || 0) + parseFloat(d.ye_base || 0)), 
-                        backgroundColor: 'rgba(52, 152, 219, 0.7)', // 藍色
-                        stack: 'combined'
-                    },
-                    {
-                        label: '公司加給 (定案差額)',
-                        data: sortedHistory.map(d => parseFloat(d.total || 0) - (parseFloat(d.f1_base || 0) + parseFloat(d.f2_base || 0) + parseFloat(d.f3_base || 0) + parseFloat(d.ye_base || 0) + parseFloat(d.proj || 0))), 
-                        backgroundColor: 'rgba(231, 76, 60, 0.8)', // 紅色
-                        stack: 'combined'
-                    },
-                    {
-                        label: '專案獎金',
-                        data: sortedHistory.map(d => parseFloat(d.proj || 0)), 
-                        backgroundColor: 'rgba(230, 126, 34, 0.8)', // 橘色
-                        stack: 'combined'
-                    }
-                ]
-            },
+            data: { labels: labels, datasets: datasets },
             options: {
                 maintainAspectRatio: false,
                 plugins: {
-                    legend: { position: 'top' },
+                    legend: { 
+                        position: 'right', // 放在右邊才不會擋到標題
+                        labels: { boxWidth: 12, font: { size: 10 } } 
+                    },
                     datalabels: { 
-                        display: true, anchor: 'end', align: 'top', 
+                        display: true,
+                        anchor: 'end',
+                        align: 'top',
                         formatter: (v, ctx) => {
-                            if (ctx.datasetIndex === ctx.chart.data.datasets.length - 1) {
+                            // 只在最後一個數據集顯示「年度總計」
+                            if (ctx.datasetIndex === datasets.length - 1) {
                                 let total = 0;
-                                for(let i=0; i<ctx.chart.data.datasets.length; i++) total += parseFloat(ctx.chart.data.datasets[i].data[ctx.dataIndex] || 0);
-                                return total.toLocaleString();
+                                for(let i=0; i<datasets.length; i++) {
+                                    total += Number(ctx.chart.data.datasets[i].data[ctx.dataIndex] || 0);
+                                }
+                                return '總計:' + total.toLocaleString();
                             }
                             return null;
-                        }
+                        },
+                        font: { weight: 'bold' }
                     }
                 },
-                scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true } }
+                scales: {
+                    x: { stacked: true },
+                    y: { stacked: true, beginAtZero: true }
+                }
             }
         });
 
-        // --- 2. 新增：主管區歷年趨勢折線圖 ---
-        const ctx2 = document.getElementById('historyTrendChart').getContext('2d');
-        if(historyTrendChart) historyTrendChart.destroy();
-        historyTrendChart = new Chart(ctx2, {
-            type: 'line',
-            data: {
-                labels: labels,
-                datasets: [{
-                    label: '總獎金成長趨勢',
-                    data: sortedHistory.map(d => parseFloat(d.total || 0)),
-                    borderColor: '#e74c3c',
-                    borderWidth: 3,
-                    fill: false,
-                    tension: 0.1,
-                    pointRadius: 6,
-                    pointBackgroundColor: '#e74c3c'
-                }]
-            },
-            options: {
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: { display: true, position: 'top' },
-                    datalabels: { display: true, align: 'top', formatter: v => v.toLocaleString() }
-                },
-                scales: { y: { beginAtZero: true } }
-            }
-        });
+        // --- 同步渲染下方的趨勢折線圖 ---
+        renderTrendChart(labels, sortedHistory.map(d => Number(d.total || 0)));
     }
+}
+
+// 獨立出來的折線圖函式，確保代碼乾淨
+function renderTrendChart(labels, data) {
+    const ctx2 = document.getElementById('historyTrendChart').getContext('2d');
+    if(window.historyTrendChartInstance) window.historyTrendChartInstance.destroy();
+    window.historyTrendChartInstance = new Chart(ctx2, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: '歷年總獎金成長趨勢',
+                data: data,
+                borderColor: '#e74c3c',
+                borderWidth: 3,
+                fill: false,
+                tension: 0.1,
+                pointRadius: 6,
+                pointBackgroundColor: '#e74c3c'
+            }]
+        },
+        options: {
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { position: 'top' },
+                datalabels: { display: true, align: 'top', formatter: v => v.toLocaleString() }
+            },
+            scales: { y: { beginAtZero: true } }
+        }
+    });
 }
 
     async function askPassword() {
