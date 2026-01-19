@@ -35,10 +35,29 @@
 
     .report-page { background: white; page-break-after: always; }
     .excel-report { width: 100%; border-collapse: collapse; margin-bottom: 30px; table-layout: fixed; }
-    .excel-report th, .excel-report td { border: 1px solid #000 !important; padding: 8px 4px; font-size: 13px; word-break: break-all; }
-    .excel-report th { background-color: #e8e8e8 !important; font-weight: bold; text-align: center; }
-    .excel-report td { text-align: right; }
-    .excel-report td:first-child { text-align: center; }
+    .excel-report th, .excel-report td {
+    border: 1px solid #000 !important;
+    padding: 10px 6px;       /* 稍微增加內距，讓大字不擁擠 */
+    font-size: 18px;         /* 設定為 18px (約等於 14pt) */
+    word-break: break-all;
+    line-height: 1.4;        /* 增加行高，提升閱讀舒適度 */
+}
+
+.excel-report th {
+    background-color: #e8e8e8 !important;
+    font-weight: bold;
+    text-align: center;
+}
+
+/* 確保姓名欄位與年度欄位在字變大後依然置中 */
+.excel-report td:first-child { 
+    text-align: center; 
+}
+
+/* 如果是全體總表，稍微縮小備註欄外的寬度，把空間留給大字 */
+.excel-report th:last-child, .excel-report td:last-child {
+    font-size: 16px; /* 備註欄通常文字較多，維持略小一點點 */
+}
 
     .report-charts { margin-top: 30px; display: flex; flex-direction: column; gap: 40px; }
     .chart-box { width: 100%; height: 380px; text-align: center; margin-bottom: 50px; padding: 20px; border: 1px solid #eee; }
@@ -428,9 +447,51 @@
         const sortedData = data.sort((a, b) => a.year - b.year);
         const labels = sortedData.map(d => d.year + "年");
         new Chart(ctxBar, { type: 'bar', data: { labels: labels, datasets: [ { label: '三節', data: sortedData.map(d => d.f1 + d.f2 + d.f3), backgroundColor: '#3498db' }, { label: '年終', data: sortedData.map(d => d.ye), backgroundColor: '#27ae60' }, { label: '專案', data: sortedData.map(d => d.proj), backgroundColor: '#e67e22' } ] }, options: { responsive: true, maintainAspectRatio: false, layout: { padding: { top: 40 } }, plugins: { legend: { position: 'left' }, datalabels: { display: true, anchor: 'end', align: 'top', font: { weight: 'bold' } } }, scales: { y: { beginAtZero: true, stacked: false } } } });
-        new Chart(ctxLine, { type: 'line', data: { labels: labels, datasets: [{ label: '總獎金成長趨勢', data: sortedData.map(d => d.total), borderColor: '#e74c3c', borderWidth: 3, fill: false, tension: 0.1, pointRadius: 6, pointBackgroundColor: '#e74c3c' }] }, options: { responsive: true, maintainAspectRatio: false, layout: { padding: { top: 30 } }, plugins: { legend: { position: 'left' }, datalabels: { display: true, align: 'top' } }, scales: { y: { beginAtZero: true } } } });
-    }
-
+        new Chart(ctxLine, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: '總獎金成長趨勢',
+                data: sortedData.map(d => d.total),
+                borderColor: '#e74c3c',
+                borderWidth: 3,
+                fill: false,
+                tension: 0.1,
+                pointRadius: 6,
+                pointBackgroundColor: '#e74c3c'
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            // 💡 核心修正：增加右側 (right) 邊距，確保大金額數字有空間顯示
+            layout: { 
+                padding: { 
+                    top: 30,
+                    right: 50,  // 增加至 50px 給予數字足夠寬度
+                    left: 20,
+                    bottom: 10
+                } 
+            },
+            plugins: {
+                legend: { position: 'left' },
+                datalabels: { 
+                    display: true, 
+                    align: 'top',
+                    offset: 5, // 讓數字與點位保持一點距離
+                    formatter: (v) => v.toLocaleString() // 格式化為千分位，增加易讀性
+                }
+            },
+            scales: { 
+                y: { beginAtZero: true },
+                x: {
+                    // 確保 X 軸標籤完整顯示
+                    ticks: { padding: 10 }
+                }
+            }
+        }
+    });
     async function handleFinalSave() {
         const getNumFromLabel = (id) => {
             const el = document.getElementById(id);
