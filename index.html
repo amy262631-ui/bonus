@@ -254,16 +254,58 @@
     }
 
     async function openReport(mode) {
-        const inner = document.getElementById('reportInner'); const name = document.getElementById('selEmp').value;
-        const res = await fetch(API_URL, { method: "POST", body: JSON.stringify({ action: "getHistoryComparison", empName: (mode==='all'?"":name) }) });
-        const r = await res.json();
-        // 報表年份排序：大到小
-        const sorted = r.history.sort((a, b) => b.year - a.year);
-        inner.innerHTML = `<h1>${mode==='all'?"全體獎金總表":"個人歷史報表 - "+name}</h1>
-            <table class="report-table"><thead><tr style="background:#f4f4f4;"><th>年度</th>${mode==='all'?"<th>姓名</th>":""}<th>五一</th><th>端午</th><th>中秋</th><th>年終</th><th>專案</th><th>總計</th></tr></thead>
-            <tbody>${sorted.map(h => `<tr><td>${h.year}</td>${mode==='all'?"<td>"+(h.empName||name)+"</td>":""}<td>${h.f1}</td><td>${h.f2}</td><td>${h.f3}</td><td>${h.ye}</td><td>${h.proj}</td><td style="font-weight:bold;">${h.total.toLocaleString()}</td></tr>`).join('')}</tbody></table>`;
-        document.getElementById('reportModal').style.display = 'block';
+    const inner = document.getElementById('reportInner');
+    const name = document.getElementById('selEmp').value;
+    // 如果是全體模式，不傳 empName
+    const payload = mode === 'all' ? { action: "getHistoryComparison" } : { action: "getHistoryComparison", empName: name };
+    
+    const res = await fetch(API_URL, { method: "POST", body: JSON.stringify(payload) });
+    const r = await res.json();
+    
+    if (mode === 'all') {
+        // 全體模式：按年度分組
+        const grouped = r.history.reduce((acc, curr) => {
+            if (!acc[curr.year]) acc[curr.year] = [];
+            acc[curr.year].push(curr);
+            return acc;
+        }, {});
+
+        const years = Object.keys(grouped).sort((a, b) => b - a);
+        let html = "";
+        years.forEach(year => {
+            html += `
+            <div class="report-page">
+                <h2 style="text-align:center;">${year} 年度獎金總結表</h2>
+                <table class="report-table">
+                    <thead>
+                        <tr>
+                            <th>姓名</th><th>五一</th><th>端午</th><th>中秋</th><th>年終</th><th>專案</th><th>總計</th>
+                            <th style="width:120px; background:#f0f0f0;">調整/備註</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${grouped[year].map(h => `
+                            <tr>
+                                <td>${h.empName}</td>
+                                <td>${h.f1.toLocaleString()}</td>
+                                <td>${h.f2.toLocaleString()}</td>
+                                <td>${h.f3.toLocaleString()}</td>
+                                <td>${h.ye.toLocaleString()}</td>
+                                <td>${h.proj.toLocaleString()}</td>
+                                <td style="font-weight:bold;">${h.total.toLocaleString()}</td>
+                                <td></td> </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>`;
+        });
+        inner.innerHTML = html;
+    } else {
+        // 個人模式：維持原樣
+        inner.innerHTML = `<h2>個人歷史報表 - ${name}</h2>...`; 
     }
+    document.getElementById('reportModal').style.display = 'block';
+}
 
     async function handleFinalSave() {
         const data = { 
