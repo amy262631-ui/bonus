@@ -83,10 +83,13 @@
             gap: 40px;
         }
         .chart-box {
-            width: 100%;
-            height: 320px;
-            text-align: center;
-        }
+    width: 100%;
+    height: 380px; /* 稍微拉高，給予 Legend 空間 */
+    text-align: center;
+    margin-bottom: 50px;
+    padding: 20px;
+    border: 1px solid #eee; /* 給圖表一個淡淡的框線，更有質感 */
+}
         .chart-box h3 {
             margin-bottom: 10px;
             font-size: 1.1rem;
@@ -322,28 +325,50 @@
     }
 
     async function updateHistoryCharts() {
-        const res = await fetch(API_URL, { method: "POST", body: JSON.stringify({ action: "getHistoryComparison", empName: document.getElementById('selEmp').value }) });
-        const r = await res.json();
-        if(r.status === "success" && r.history.length > 0) {
-            // 修正：年份排序由左至右遞增
-            const sortedHistory = r.history.sort((a, b) => a.year - b.year);
-            const ctx1 = document.getElementById('historyCompareChart').getContext('2d'); if(historyCompareChart) historyCompareChart.destroy();
-            historyCompareChart = new Chart(ctx1, { 
-                type: 'bar', 
-                data: { 
-                    labels: ['五一','端午','中秋','年終','專案'], 
-                    datasets: sortedHistory.map((d, i) => ({ 
-                        label: d.year+'年', 
-                        data:[d.f1, d.f2, d.f3, d.ye, d.proj], 
-                        backgroundColor:`rgba(52, 152, 219, ${0.4 + (i * 0.2)})`,
-                        borderColor: '#2980b9',
-                        borderWidth: 1
-                    })) 
-                }, 
-                options: { maintainAspectRatio: false, plugins: { datalabels: { display: true, anchor:'end', align:'top' } } } 
-            });
-        }
+    const res = await fetch(API_URL, { method: "POST", body: JSON.stringify({ action: "getHistoryComparison", empName: document.getElementById('selEmp').value }) });
+    const r = await res.json();
+    if(r.status === "success" && r.history.length > 0) {
+        const sortedHistory = r.history.sort((a, b) => a.year - b.year);
+        const ctx1 = document.getElementById('historyCompareChart').getContext('2d');
+        if(historyCompareChart) historyCompareChart.destroy();
+
+        historyCompareChart = new Chart(ctx1, {
+            type: 'bar',
+            data: {
+                labels: sortedHistory.map(d => d.year + '年'),
+                datasets: [
+                    {
+                        label: '試算參考 (底碼)',
+                        data: sortedHistory.map(d => d.f1_base + d.f2_base + d.f3_base + d.ye_base), // 這裡需後端回傳 base
+                        backgroundColor: 'rgba(52, 152, 219, 0.5)', // 淺藍色
+                        stack: 'Stack 0',
+                    },
+                    {
+                        label: '公司加給 (定案差額)',
+                        data: sortedHistory.map(d => d.total - (d.f1_base + d.f2_base + d.f3_base + d.ye_base)), 
+                        backgroundColor: 'rgba(231, 76, 60, 0.8)', // 紅色表示加給
+                        stack: 'Stack 0',
+                    }
+                ]
+            },
+            options: {
+                maintainAspectRatio: false,
+                plugins: {
+                    tooltip: { callbacks: { label: (c) => c.dataset.label + ": " + c.raw.toLocaleString() } },
+                    datalabels: { display: true, anchor: 'end', align: 'top', formatter: (v, ctx) => {
+                        // 僅在最上方顯示總額標籤
+                        if (ctx.datasetIndex === 1) {
+                            const total = ctx.chart.data.datasets[0].data[ctx.dataIndex] + v;
+                            return total.toLocaleString();
+                        }
+                        return null;
+                    }}
+                },
+                scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true } }
+            }
+        });
     }
+}
 
     async function askPassword() {
         const pwd = prompt("主管授權密碼");
@@ -470,11 +495,9 @@
  */
 function renderReportCharts(data) {
     const ctxBar = document.getElementById('printBarChart').getContext('2d');
-    const ctxLine = document.getElementById('printLineChart').getContext('2d');
     const sortedData = data.sort((a,b) => a.year - b.year);
     const labels = sortedData.map(d => d.year + "年");
 
-   // 1. 歷年獎金組成分析 (長條圖)
     new Chart(ctxBar, {
         type: 'bar',
         data: {
@@ -488,15 +511,13 @@ function renderReportCharts(data) {
         options: { 
             responsive: true, 
             maintainAspectRatio: false,
+            layout: { padding: { top: 30 } }, // 增加頂部空間，防止標籤被切到
             plugins: { 
-                datalabels: { display: true, anchor:'end', align:'top' } 
+                legend: { position: 'bottom' }, // 將顏色說明移到下方，避免擋住中間獎金數字
+                datalabels: { display: true, anchor:'end', align:'top', font: { weight: 'bold' } }
             },
             scales: { 
-                x: { stacked: false }, // 確保 X 軸不堆疊
-                y: { 
-                    stacked: false,    // 修正：將堆疊設為 false，讓長條圖回歸 0 基準線
-                    beginAtZero: true  // 確保從 0 開始
-                } 
+                y: { beginAtZero: true, ticks: { padding: 10 } } 
             } 
         }
     });
