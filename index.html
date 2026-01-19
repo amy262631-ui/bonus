@@ -5,78 +5,112 @@
     <title>獎金管理系統 - 全功能優化版</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
-    <style>
+  <style>
         /* 1. 系統主介面樣式 */
         :root { --primary: #2c3e50; --accent: #3498db; --success: #27ae60; --danger: #e74c3c; --project: #e67e22; --bg: #f4f7f6; }
         body { font-family: "Microsoft JhengHei", sans-serif; background: var(--bg); padding: 20px; }
         .card { background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); margin-bottom: 25px; }
         .header-controls { display: flex; gap: 15px; align-items: center; margin-bottom: 20px; }
         #selEmp, #calcYear { padding: 8px 15px; border-radius: 8px; border: 1px solid #ccc; font-size: 1.1rem; }
+        
+        /* 評分輸入框優化：寬度足夠顯示小數點，數值不遮擋 */
         .score-container { display: flex; flex-direction: column; gap: 10px; padding: 15px; background: #f8f9fa; border-radius: 10px; border-left: 8px solid var(--primary); margin-bottom: 15px; }
         .score-grid { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end; }
         .input-group { display: flex; flex-direction: column; align-items: center; gap: 6px; }
         .input-label { font-size: 0.85rem; color: #666; font-weight: bold; }
         .q-score { 
-    width: 65px; /* 增加寬度以容納小數點 */
-    height: 35px; 
-    text-align: center; 
-    font-size: 1rem; 
-    border: 1px solid #ddd; 
-    border-radius: 6px; 
-    font-weight: bold;
-    padding: 0 4px; /* 增加內距 */
-}
+            width: 65px; 
+            height: 35px; 
+            text-align: center; 
+            font-size: 1rem; 
+            border: 1px solid #ddd; 
+            border-radius: 6px; 
+            font-weight: bold;
+            padding: 0 4px;
+        }
+
         .avg-display { min-width: 150px; background: var(--primary); color: white; padding: 10px; border-radius: 8px; text-align: center; margin-left: auto; font-size: 1.1rem; font-weight: bold; }
-        .target-input { width: 105px; height: 40px; color: var(--danger); font-size: 1.35rem; border: 2px solid var(--danger); text-align: center; font-weight: bold; background: #fff5f5; border-radius: 6px; margin-top: 5px; }
-        .reference-text { color: #27ae60; font-weight: bold; font-size: 0.9rem; display: block; }
+        
+        /* 定案獎金樣式：紅色標題與紅色框線 */
+        .target-label { color: var(--danger); font-weight: bold; font-size: 0.9rem; margin-bottom: 2px; display: block; }
+        .target-input { 
+            width: 105px; 
+            height: 40px; 
+            color: var(--danger); 
+            font-size: 1.35rem; 
+            border: 2px solid var(--danger); 
+            text-align: center; 
+            font-weight: bold; 
+            background: #fff5f5; 
+            border-radius: 6px; 
+        }
+        
+        .reference-text { color: #27ae60; font-weight: bold; font-size: 0.85rem; display: block; margin-bottom: 2px; }
         .btn { padding: 10px 20px; border: none; border-radius: 8px; cursor: pointer; color: white; font-weight: bold; display: flex; align-items: center; gap: 5px; transition: 0.2s; }
         .total-cell { font-size: 2.2rem; font-weight: bold; background: #fff3cd; color: #d35400; min-width: 150px; }
         
-        /* 2. 報表視窗基礎樣式 */
+        /* 2. 報表視窗與內容基礎 */
         #reportModal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 2000; overflow-y: auto; padding: 40px 20px; }
         .report-content { background: white; max-width: 1100px; margin: 0 auto; padding: 40px; border-radius: 15px; position: relative; }
 
-        /* 3. Excel 風格報表專用樣式 (新增) */
-        .report-page { background: white; }
+        /* 3. Excel 風格報表樣式 */
+        .report-page { background: white; page-break-after: always; }
         .excel-report {
             width: 100%;
             border-collapse: collapse;
             margin-bottom: 30px;
-            table-layout: fixed; /* 固定寬度確保列印不跑版 */
+            table-layout: fixed;
         }
         .excel-report th, .excel-report td {
-            border: 1px solid #000 !important; /* 強化黑色框線 */
+            border: 1px solid #000 !important;
             padding: 8px 4px;
             font-size: 13px;
             word-break: break-all;
         }
         .excel-report th {
-            background-color: #e8e8e8 !important; /* Excel 灰色標題感 */
+            background-color: #e8e8e8 !important;
             font-weight: bold;
             text-align: center;
         }
         .excel-report td { text-align: right; }
-        .excel-report td:first-child { text-align: center; } /* 姓名置中 */
+        .excel-report td:first-child { text-align: center; }
 
-        /* 4. 列印優化與三年度自動斷頁 (重要) */
+        /* 4. 個人報表圖表區塊樣式 */
+        .report-charts {
+            margin-top: 30px;
+            display: flex;
+            flex-direction: column;
+            gap: 40px;
+        }
+        .chart-box {
+            width: 100%;
+            height: 320px;
+            text-align: center;
+        }
+        .chart-box h3 {
+            margin-bottom: 10px;
+            font-size: 1.1rem;
+            color: #333;
+        }
+
+        /* 5. 列印優化與分頁 */
         @media print {
             body { padding: 0 !important; background: white !important; }
-            body * { visibility: hidden; } /* 隱藏網頁其餘部分 */
-            #reportModal, #reportModal * { visibility: visible; } /* 僅列印報表視窗 */
+            body * { visibility: hidden; }
+            #reportModal, #reportModal * { visibility: visible; }
             #reportModal { position: absolute; left: 0; top: 0; width: 100%; background: white !important; padding: 0 !important; }
             .report-content { box-shadow: none !important; border-radius: 0 !important; width: 100% !important; max-width: none !important; margin: 0 !important; padding: 0 !important; }
             .no-print { display: none !important; }
             
-            /* 每三年度一頁的物理高度控制 (A4 滿版) */
             .report-page {
-                page-break-after: always;
-                height: 285mm; /* A4 高度約 297mm，扣除邊距 */
+                height: 285mm; /* A4 高度控制 */
                 padding: 10mm;
                 box-sizing: border-box;
                 display: flex;
                 flex-direction: column;
             }
-            .excel-report th { -webkit-print-color-adjust: exact; print-color-adjust: exact; } /* 強制列印背景色 */
+            .excel-report th { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            .chart-box { page-break-inside: avoid; } /* 防止圖表被強行切斷到兩頁 */
         }
     </style>
 </head>
@@ -307,66 +341,162 @@
         document.getElementById('totalCell').innerText = t.toLocaleString();
     }
 
-    async function openReport(mode) {
+   async function openReport(mode) {
     const inner = document.getElementById('reportInner');
-    const res = await fetch(API_URL, { method: "POST", body: JSON.stringify({ action: "getHistoryComparison" }) });
+    const name = document.getElementById('selEmp').value;
+    
+    // 根據模式決定 API 請求參數
+    const payload = mode === 'all' ? { action: "getHistoryComparison" } : { action: "getHistoryComparison", empName: name };
+    
+    const res = await fetch(API_URL, { method: "POST", body: JSON.stringify(payload) });
     const r = await res.json();
     
-    // 1. 按年度分組數據
-    const grouped = r.history.reduce((acc, curr) => {
-        if (!acc[curr.year]) acc[curr.year] = [];
-        acc[curr.year].push(curr);
-        return acc;
-    }, {});
+    if (mode === 'all') {
+        // --- 1. 全體總表模式：每 3 年一頁，Excel 框線 ---
+        const grouped = r.history.reduce((acc, curr) => {
+            if (!acc[curr.year]) acc[curr.year] = [];
+            acc[curr.year].push(curr);
+            return acc;
+        }, {});
 
-    // 2. 年度排序：越舊的在上方 (2023 -> 2024 -> 2025)
-    const sortedYears = Object.keys(grouped).sort((a, b) => a - b);
+        const sortedYears = Object.keys(grouped).sort((a, b) => a - b);
+        let fullHtml = "";
 
-    // 3. 每 3 年一組分頁
-    let fullHtml = "";
-    for (let i = 0; i < sortedYears.length; i += 3) {
-        const pageYears = sortedYears.slice(i, i + 3);
-        
-        fullHtml += `<div class="report-page">`;
-        pageYears.forEach(year => {
-            fullHtml += `
-            <h2 style="text-align:center; margin: 10px 0;">${year} 年度獎金總結表</h2>
+        for (let i = 0; i < sortedYears.length; i += 3) {
+            const pageYears = sortedYears.slice(i, i + 3);
+            fullHtml += `<div class="report-page">`;
+            pageYears.forEach(year => {
+                fullHtml += `
+                <h2 style="text-align:center; margin: 10px 0;">${year} 年度全體獎金總結表</h2>
+                <table class="excel-report">
+                    <thead>
+                        <tr>
+                            <th style="width:15%;">姓名</th>
+                            <th style="width:10%;">五一</th><th style="width:10%;">端午</th><th style="width:10%;">中秋</th>
+                            <th style="width:10%;">年終</th><th style="width:10%;">專案</th>
+                            <th style="width:12%;">總計</th>
+                            <th style="width:23%;">調整/備註 (空白手寫)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${grouped[year].map(h => `
+                            <tr>
+                                <td>${h.empName}</td>
+                                <td>${h.f1.toLocaleString()}</td><td>${h.f2.toLocaleString()}</td><td>${h.f3.toLocaleString()}</td>
+                                <td>${h.ye.toLocaleString()}</td><td>${h.proj.toLocaleString()}</td>
+                                <td style="font-weight:bold;">${h.total.toLocaleString()}</td>
+                                <td></td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>`;
+            });
+            fullHtml += `</div>`;
+        }
+        inner.innerHTML = fullHtml;
+
+    } else {
+        // --- 2. 個人報表模式：歷年明細 + 表格下方嵌入圖表 ---
+        let html = `
+        <div class="report-page">
+            <h2 style="text-align:center; margin-bottom: 20px;">${name} - 歷年獎金績效明細報告</h2>
             <table class="excel-report">
                 <thead>
                     <tr>
-                        <th style="width:15%;">姓名</th>
-                        <th style="width:10%;">五一</th>
-                        <th style="width:10%;">端午</th>
-                        <th style="width:10%;">中秋</th>
-                        <th style="width:10%;">年終</th>
-                        <th style="width:10%;">專案</th>
-                        <th style="width:12%;">總計</th>
-                        <th style="width:23%;">調整/備註 (空白手寫)</th>
+                        <th style="width:15%;">年度</th>
+                        <th>五一</th><th>端午</th><th>中秋</th><th>年終</th><th>專案</th>
+                        <th style="width:15%;">總計</th>
+                        <th style="width:20%;">手寫備註</th>
                     </tr>
                 </thead>
                 <tbody>
-                    ${grouped[year].map(h => `
+                    ${r.history.sort((a,b)=>a.year-b.year).map(h => `
                         <tr>
-                            <td>${h.empName}</td>
-                            <td>${h.f1.toLocaleString()}</td>
-                            <td>${h.f2.toLocaleString()}</td>
-                            <td>${h.f3.toLocaleString()}</td>
-                            <td>${h.ye.toLocaleString()}</td>
-                            <td>${h.proj.toLocaleString()}</td>
+                            <td style="text-align:center;">${h.year}</td>
+                            <td>${h.f1.toLocaleString()}</td><td>${h.f2.toLocaleString()}</td><td>${h.f3.toLocaleString()}</td>
+                            <td>${h.ye.toLocaleString()}</td><td>${h.proj.toLocaleString()}</td>
                             <td style="font-weight:bold;">${h.total.toLocaleString()}</td>
                             <td></td>
                         </tr>
                     `).join('')}
                 </tbody>
-            </table>`;
-        });
-        fullHtml += `</div>`;
-    }
+            </table>
+            
+            <div class="report-charts" style="margin-top: 40px; display: flex; flex-direction: column; gap: 50px;">
+                <div style="width:100%; height:300px; text-align:center;">
+                    <h3 style="font-size:1.1rem; margin-bottom:10px;">🏆 歷年獎金組成分析 (長條圖)</h3>
+                    <canvas id="printBarChart"></canvas>
+                </div>
+                <div style="width:100%; height:300px; text-align:center;">
+                    <h3 style="font-size:1.1rem; margin-bottom:10px;">📈 歷年總獎金趨勢 (折線圖)</h3>
+                    <canvas id="printLineChart"></canvas>
+                </div>
+            </div>
+        </div>`;
+        
+        inner.innerHTML = html;
 
-    inner.innerHTML = fullHtml;
+        // 必須延遲渲染圖表，確保 HTML 已經放入 DOM
+        setTimeout(() => {
+            renderReportCharts(r.history);
+        }, 300);
+    }
+    
     document.getElementById('reportModal').style.display = 'block';
 }
 
+/**
+ * 新增：個人報表專用的圖表渲染函式
+ */
+function renderReportCharts(data) {
+    const ctxBar = document.getElementById('printBarChart').getContext('2d');
+    const ctxLine = document.getElementById('printLineChart').getContext('2d');
+    const sortedData = data.sort((a,b) => a.year - b.year);
+    const labels = sortedData.map(d => d.year + "年");
+
+    // 渲染長條圖
+    new Chart(ctxBar, {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [
+                { label: '三節', data: sortedData.map(d => d.f1 + d.f2 + d.f3), backgroundColor: '#3498db' },
+                { label: '年終', data: sortedData.map(d => d.ye), backgroundColor: '#27ae60' },
+                { label: '專案', data: sortedData.map(d => d.proj), backgroundColor: '#e67e22' }
+            ]
+        },
+        options: { 
+            responsive: true, 
+            maintainAspectRatio: false,
+            plugins: { datalabels: { display: true, anchor:'end', align:'top' } },
+            scales: { y: { stacked: true, beginAtZero: true } } 
+        }
+    });
+
+    // 渲染折線圖
+    new Chart(ctxLine, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: '總獎金成長趨勢',
+                data: sortedData.map(d => d.total),
+                borderColor: '#e74c3c',
+                borderWidth: 3,
+                fill: false,
+                tension: 0.1,
+                pointRadius: 6,
+                pointBackgroundColor: '#e74c3c'
+            }]
+        },
+        options: { 
+            responsive: true, 
+            maintainAspectRatio: false,
+            plugins: { datalabels: { display: true, align:'top' } },
+            scales: { y: { beginAtZero: true } }
+        }
+    });
+}
     async function handleFinalSave() {
         const data = { 
             action: "saveRecord", 
