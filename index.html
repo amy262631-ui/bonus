@@ -142,27 +142,26 @@
     };
 
     function initUI() {
-    const sel = document.getElementById('selEmp');
-    const opt = sel.options[sel.selectedIndex];
-    const isL1 = opt.dataset.rank === 'L1';
-    
-    // 💡 核心修正：換人時先徹底重設 timelineData，防止抓到上一人的職等薪資
-    timelineData = { 
-        Q1:{r:opt.dataset.rank, s:opt.dataset.salary}, 
-        Q2:{r:opt.dataset.rank, s:opt.dataset.salary}, 
-        Q3:{r:opt.dataset.rank, s:opt.dataset.salary}, 
-        Q4:{r:opt.dataset.rank, s:opt.dataset.salary} 
-    };
+        const sel = document.getElementById('selEmp');
+        const opt = sel.options[sel.selectedIndex];
+        const isL1 = opt.dataset.rank === 'L1';
+        
+        timelineData = { 
+            Q1:{r:opt.dataset.rank, s:opt.dataset.salary}, 
+            Q2:{r:opt.dataset.rank, s:opt.dataset.salary}, 
+            Q3:{r:opt.dataset.rank, s:opt.dataset.salary}, 
+            Q4:{r:opt.dataset.rank, s:opt.dataset.salary} 
+        };
 
-    let h1 = '', h2 = '';
-    for(let i=1; i<=(isL1?12:4); i++) h1 += `<div class="input-group"><span class="input-label">${isL1?i+'月':'Q'+i}</span><input type="number" class="q-score ann-in" oninput="runLiveCalc()"></div>`;
-    for(let i=1; i<=12; i++) h2 += `<div class="input-group"><span class="input-label">${i}月</span><input type="number" class="q-score prj-in" oninput="runLiveCalc()"></div>`;
-    
-    document.getElementById('annualInputs').innerHTML = h1; 
-    document.getElementById('projInputs').innerHTML = h2;
-    
-    autoCalc(true); // 執行自動載入
-}
+        let h1 = '', h2 = '';
+        for(let i=1; i<=(isL1?12:4); i++) h1 += `<div class="input-group"><span class="input-label">${isL1?i+'月':'Q'+i}</span><input type="number" class="q-score ann-in" oninput="runLiveCalc()"></div>`;
+        for(let i=1; i<=12; i++) h2 += `<div class="input-group"><span class="input-label">${i}月</span><input type="number" class="q-score prj-in" oninput="runLiveCalc()"></div>`;
+        
+        document.getElementById('annualInputs').innerHTML = h1; 
+        document.getElementById('projInputs').innerHTML = h2;
+        
+        autoCalc(true); 
+    }
 
     function runLiveCalc() {
         const getAvg = (cls) => {
@@ -176,110 +175,115 @@
     }
 
     async function autoCalc(forceSync = false) {
-    if (isUserTyping && !forceSync) return;
-
-    // 💡 核心修正：在讀取新年度/新人員資料前，先清空畫面上所有輸入框
-    if(forceSync) {
-        document.querySelectorAll('.ann-in, .prj-in').forEach(i => i.value = "");
-        if(document.getElementById('resultBody')) {
-            document.getElementById('resultBody').innerHTML = ""; // 先清空主管區
-        }
-    }
-
-    const payload = { 
-        action: "calculateBonus", 
-        empName: document.getElementById('selEmp').value, 
-        year: document.getElementById('calcYear').value, 
-        scores: Array.from(document.querySelectorAll('.ann-in')).map(i => i.value||null), 
-        timeline: timelineData, 
-        avgScore: document.getElementById('avgSpan').innerText, 
-        projAvg: document.getElementById('projAvgSpan').innerText 
-    };
-
-    const res = await fetch(API_URL, { method: "POST", body: JSON.stringify(payload) });
-    const r = await res.json();
-        
-    if(r.status === "success") {
-        // 💡 重點：把後端傳來的年度參數存進 baseResults，讓計算公式可以抓到
-        baseResults = r.data;
-        baseResults.yearConfigs = r.yearConfigs; // <-- 新增這一行
+        if (isUserTyping && !forceSync) return;
 
         if(forceSync) {
-            // ... 填充歷史分數邏輯 ...
-            runLiveCalc(); 
+            document.querySelectorAll('.ann-in, .prj-in').forEach(i => i.value = "");
+            if(document.getElementById('resultBody')) document.getElementById('resultBody').innerHTML = "";
         }
-        renderTimelineUI();
-        updateAdminTableUI(r.historyAdjs || [0,0,0,0,80000,0]);
-        updateHistoryCharts();
+
+        const payload = { 
+            action: "calculateBonus", 
+            empName: document.getElementById('selEmp').value, 
+            year: document.getElementById('calcYear').value, 
+            scores: Array.from(document.querySelectorAll('.ann-in')).map(i => i.value||null), 
+            timeline: timelineData, 
+            avgScore: document.getElementById('avgSpan').innerText, 
+            projAvg: document.getElementById('projAvgSpan').innerText 
+        };
+
+        try {
+            const res = await fetch(API_URL, { method: "POST", body: JSON.stringify(payload) });
+            const r = await res.json();
+            
+            if(r.status === "success") {
+                baseResults = r.data;
+                baseResults.yearConfigs = r.yearConfigs; // 💡 接收後端 System_Config
+
+                if(forceSync) {
+                    if(r.historyScores) document.querySelectorAll('.ann-in').forEach((el,i) => el.value = r.historyScores[i] || "");
+                    if(r.historyProjScores) document.querySelectorAll('.prj-in').forEach((el,i) => el.value = r.historyProjScores[i] || "");
+                    if(r.historyTimeline) timelineData = r.historyTimeline;
+                    runLiveCalc(); 
+                }
+                renderTimelineUI();
+                updateAdminTableUI(r.historyAdjs || [0,0,0,0,80000,0]);
+                updateHistoryCharts();
+            }
+        } catch(e) { console.error("AutoCalc Error:", e); }
     }
 
- function updateAdminTableUI(adjs = null) {
-    const cfg = baseResults.yearConfigs || {};
-    const rb = document.getElementById('resultBody');
-    if (!rb) return;
+    function updateAdminTableUI(adjs = null) {
+        const cfg = baseResults.yearConfigs || {};
+        const rb = document.getElementById('resultBody');
+        if (!rb) return;
 
-    // 💡 讀取這筆資料在資料庫中的「總額」存檔 (這才是真正的歷史發放金額)
-    // 假設我們在後端回傳時已經有 historyTotal 或是從 baseResults 取得
-    const savedTotal = baseResults.historyTotal || 0; 
-    const isHistory = adjs && adjs.some((val, idx) => (idx !== 4 && val !== 0) || (idx === 4 && val !== 80000));
+        const calcRef = (q, idx) => {
+            const r = timelineData[q].r;
+            const s = parseFloat(timelineData[q].s);
+            if (r === "L1") return parseFloat(cfg.L1_Fest_Over_6M || 1000);
+            const baseKey = `${r}_Base`;
+            const base = parseFloat(cfg[baseKey] || (r === "L2" ? 0.7 : (r === "L3" ? 1.0 : 1.5)));
+            const qScore = parseFloat(document.querySelectorAll('.ann-in')[idx]?.value || 0);
+            return Math.round(s * 0.25 * base * getPerfMult_Frontend(qScore, "quarterly"));
+        };
 
-    const calcRef = (q, idx) => {
-        const r = timelineData[q].r;
-        const s = parseFloat(timelineData[q].s);
-        if (r === "L1") return parseFloat(cfg.L1_Fest_Over_6M || 1000);
-        const baseKey = `${r}_Base`;
-        const base = parseFloat(cfg[baseKey] || (r === "L2" ? 0.7 : (r === "L3" ? 1.0 : 1.5)));
-        const qScore = parseFloat(document.querySelectorAll('.ann-in')[idx]?.value || 0);
-        return Math.round(s * 0.25 * base * getPerfMult_Frontend(qScore, "quarterly"));
-    };
+        let html = `<tr><td>${document.getElementById('selEmp').value}</td><td>${document.getElementById('calcYear').value}</td><td style="color:blue;font-weight:bold;">${document.getElementById('avgSpan').innerText}</td>`;
+        
+        const items = ['f1', 'f2', 'f3', 'ye', 'proj'];
+        items.forEach((item, i) => {
+            let ref = 0;
+            let displayVal = 0;
 
-    let html = `<tr><td>${document.getElementById('selEmp').value}</td><td>${document.getElementById('calcYear').value}</td><td style="color:blue;font-weight:bold;">${document.getElementById('avgSpan').innerText}</td>`;
-    
-    const items = ['f1', 'f2', 'f3', 'ye', 'proj'];
-    items.forEach((item, i) => {
-        let ref = 0;
-        let displayVal = 0;
+            if (item === 'proj') {
+                const projBase = adjs ? adjs[4] : (cfg.Project_Total || 80000);
+                const projMult = getProjectMultiplier_Frontend(document.getElementById('projAvgSpan').innerText);
+                ref = Math.round(projBase * projMult);
+                displayVal = ref + (adjs ? adjs[5] : 0);
+            } else if (item === 'ye') {
+                const q4Rank = timelineData.Q4.r;
+                const s = parseFloat(timelineData.Q4.s);
+                const yeBase = (q4Rank === "L1") ? parseFloat(cfg.L1_Over_1Y || 0.5) : parseFloat(cfg[`${q4Rank}_Base`] || 1.0);
+                ref = Math.round(s * yeBase * getPerfMult_Frontend(document.getElementById('avgSpan').innerText, "annual"));
+                displayVal = ref + (adjs ? adjs[3] : 0);
+            } else {
+                ref = calcRef("Q" + (i + 1), i);
+                displayVal = ref + (adjs ? adjs[i] : 0);
+            }
 
-        // 計算當前公式下的「參考值」
-        if (item === 'proj') {
-            const projBase = adjs ? adjs[4] : (cfg.Project_Total || 80000);
-            const projMult = getProjectMultiplier_Frontend(document.getElementById('projAvgSpan').innerText);
-            ref = Math.round(projBase * projMult);
-        } else if (item === 'ye') {
-            const q4Rank = timelineData.Q4.r;
-            const s = parseFloat(timelineData.Q4.s);
-            const yeBase = (q4Rank === "L1") ? parseFloat(cfg.L1_Over_1Y || 0.5) : parseFloat(cfg[`${q4Rank}_Base`] || 1.0);
-            ref = Math.round(s * yeBase * getPerfMult_Frontend(document.getElementById('avgSpan').innerText, "annual"));
+            html += `<td>
+                <span class="reference-text" id="ref_${item}">${item==='proj'?'試算':'參考'}:${ref.toLocaleString()}</span>
+                <span class="target-label">定案獎金：</span>
+                <input type="number" class="target-input" id="target_${item}" value="${displayVal}" oninput="refreshTotal()">
+            </td>`;
+        });
+
+        html += `<input type="hidden" id="adj_proj_base" value="${adjs ? adjs[4] : 80000}">`;
+        html += `<td id="totalCell" class="total-cell">0</td></tr>`;
+        
+        rb.innerHTML = html;
+        refreshTotal();
+    }
+
+    // 💡 補齊缺失的績效倍率函式
+    function getPerfMult_Frontend(score, type) {
+        let s = parseFloat(score);
+        if (isNaN(s) || s <= 0) return 0;
+        if (type === "quarterly") {
+            if (s >= 90) return 1.2; if (s >= 80) return 1.0; if (s >= 70) return 0.8; if (s >= 60) return 0.7;
+            return 0.5;
         } else {
-            ref = calcRef("Q" + (i + 1), i);
+            if (s >= 90) return 1.5; if (s >= 80) return 1.3; if (s >= 70) return 1.0; if (s >= 60) return 0.7;
+            return 0.5;
         }
+    }
 
-        // 💡 核心邏輯修正：如果是歷史資料，定案獎金直接讀取「當時存好的定案金額」
-        // 我們假設儲存時已經把定案金額存在某些欄位，如果沒有，就用 ref + adj
-        // 為了確保不跳動，我們這裡直接計算出結果
-        if (item === 'proj') {
-            displayVal = ref + (adjs ? adjs[5] : 0);
-        } else if (item === 'ye') {
-            displayVal = ref + (adjs ? adjs[3] : 0);
-        } else {
-            displayVal = ref + (adjs ? adjs[i] : 0);
-        }
-
-        html += `<td>
-            <span class="reference-text" id="ref_${item}">${item==='proj'?'試算':'參考'}:${ref.toLocaleString()}</span>
-            <span class="target-label">定案獎金：</span>
-            <input type="number" class="target-input" id="target_${item}" 
-                   value="${displayVal}" 
-                   oninput="refreshTotal()">
-        </td>`;
-    });
-
-    html += `<input type="hidden" id="adj_proj_base" value="${adjs ? adjs[4] : 80000}">`;
-    html += `<td id="totalCell" class="total-cell">0</td></tr>`;
-    
-    rb.innerHTML = html;
-    refreshTotal();
-}
+    function getProjectMultiplier_Frontend(score) {
+        let s = parseFloat(score);
+        if (isNaN(s) || s <= 0) return 0;
+        if (s >= 90) return 1.0; if (s >= 80) return 0.8; if (s >= 70) return 0.6; if (s >= 60) return 0.4;
+        return 0.2;
+    }
 
     function renderTimelineUI() {
         let rH = '<td>職等</td>', sH = '<td>月薪</td>';
@@ -300,95 +304,79 @@
         scoreChart = new Chart(ctx, { type: 'line', data: { datasets: [{ label: '年度評分', data: annData, borderColor: '#3498db', backgroundColor:'transparent', fill: false, tension: 0.1, pointRadius: 5 }, { label: '專案評分', data: prjData, borderColor: '#e67e22', borderDash: [5,5], tension: 0.3 } ]}, options: { maintainAspectRatio: false, scales: { x: { type: 'linear', min:1, max:12, ticks: { stepSize: 1, callback: v => v + '月' } } }, plugins: { datalabels: { display: true, align:'top', formatter: v => v.y || '' } } } });
     }
 
-   let historyTrendChart = null; // 在最上方定義變數，防止重複渲染
+    let historyTrendChart = null; 
+    async function updateHistoryCharts() {
+        const res = await fetch(API_URL, { method: "POST", body: JSON.stringify({ action: "getHistoryComparison", empName: document.getElementById('selEmp').value }) });
+        const r = await res.json();
+        if(r.status === "success" && r.history.length > 0) {
+            const sortedHistory = r.history.sort((a, b) => a.year - b.year);
+            const labels = sortedHistory.map(d => d.year + '年');
+            const ctx1 = document.getElementById('historyCompareChart').getContext('2d');
+            if(historyCompareChart) historyCompareChart.destroy();
+            historyCompareChart = new Chart(ctx1, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        { label: '五一', data: sortedHistory.map(d => Number(d.f1 || 0)), backgroundColor: '#3498db' },
+                        { label: '端午', data: sortedHistory.map(d => Number(d.f2 || 0)), backgroundColor: '#2980b9' },
+                        { label: '中秋', data: sortedHistory.map(d => Number(d.f3 || 0)), backgroundColor: '#1f618d' },
+                        { label: '年終', data: sortedHistory.map(d => Number(d.ye || 0)), backgroundColor: '#27ae60' },
+                        { label: '專案', data: sortedHistory.map(d => Number(d.proj || 0)), backgroundColor: '#e67e22' }
+                    ]
+                },
+                options: {
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'top' },
+                        datalabels: { 
+                            display: true, anchor: 'end', align: 'top', 
+                            formatter: (v, ctx) => {
+                                if (ctx.datasetIndex === ctx.chart.data.datasets.length - 1) {
+                                    let total = 0;
+                                    for(let i=0; i<ctx.chart.data.datasets.length; i++) total += Number(ctx.chart.data.datasets[i].data[ctx.dataIndex] || 0);
+                                    return '總計:' + total.toLocaleString();
+                                }
+                                return null;
+                            },
+                            font: { weight: 'bold' }
+                        }
+                    },
+                    scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true } }
+                }
+            });
+            renderTrendChart(labels, sortedHistory.map(d => Number(d.total || 0)));
+        }
+    }
 
-async function updateHistoryCharts() {
-    const res = await fetch(API_URL, { 
-        method: "POST", 
-        body: JSON.stringify({ action: "getHistoryComparison", empName: document.getElementById('selEmp').value }) 
-    });
-    const r = await res.json();
-    
-    if(r.status === "success" && r.history.length > 0) {
-        const sortedHistory = r.history.sort((a, b) => a.year - b.year);
-        const labels = sortedHistory.map(d => d.year + '年');
-        const ctx1 = document.getElementById('historyCompareChart').getContext('2d');
-        if(historyCompareChart) historyCompareChart.destroy();
-
-        // 改回單純設計：每一種獎金為一個獨立數據集
-        historyCompareChart = new Chart(ctx1, {
-            type: 'bar',
+    function renderTrendChart(labels, data) {
+        const ctx2 = document.getElementById('historyTrendChart').getContext('2d');
+        if(window.historyTrendChartInstance) window.historyTrendChartInstance.destroy();
+        window.historyTrendChartInstance = new Chart(ctx2, {
+            type: 'line',
             data: {
                 labels: labels,
-                datasets: [
-                    { label: '五一', data: sortedHistory.map(d => Number(d.f1 || 0)), backgroundColor: '#3498db' }, // 藍色
-                    { label: '端午', data: sortedHistory.map(d => Number(d.f2 || 0)), backgroundColor: '#2980b9' },
-                    { label: '中秋', data: sortedHistory.map(d => Number(d.f3 || 0)), backgroundColor: '#1f618d' },
-                    { label: '年終', data: sortedHistory.map(d => Number(d.ye || 0)), backgroundColor: '#27ae60' },
-                    { label: '專案', data: sortedHistory.map(d => Number(d.proj || 0)), backgroundColor: '#e67e22' }
-                ]
+                datasets: [{
+                    label: '歷年總獎金成長趨勢',
+                    data: data,
+                    borderColor: '#e74c3c',
+                    borderWidth: 3,
+                    fill: false,
+                    tension: 0.1,
+                    pointRadius: 6,
+                    pointBackgroundColor: '#e74c3c'
+                }]
             },
             options: {
                 maintainAspectRatio: false,
                 plugins: {
                     legend: { position: 'top' },
-                    datalabels: { 
-                        display: true, anchor: 'end', align: 'top', 
-                        formatter: (v, ctx) => {
-                            // 僅在最頂層顯示該年度總計
-                            if (ctx.datasetIndex === ctx.chart.data.datasets.length - 1) {
-                                let total = 0;
-                                for(let i=0; i<ctx.chart.data.datasets.length; i++) {
-                                    total += Number(ctx.chart.data.datasets[i].data[ctx.dataIndex] || 0);
-                                }
-                                return '總計:' + total.toLocaleString();
-                            }
-                            return null;
-                        },
-                        font: { weight: 'bold' }
-                    }
+                    datalabels: { display: true, align: 'top', formatter: v => v.toLocaleString() }
                 },
-                scales: { 
-                    x: { stacked: true }, 
-                    y: { stacked: true, beginAtZero: true } 
-                }
+                scales: { y: { beginAtZero: true } }
             }
         });
-
-        // 同步渲染下方的「歷年總獎金趨勢 (折線圖)」
-        renderTrendChart(labels, sortedHistory.map(d => Number(d.total || 0)));
     }
-}
-
-// 獨立出來的折線圖函式，確保代碼乾淨
-function renderTrendChart(labels, data) {
-    const ctx2 = document.getElementById('historyTrendChart').getContext('2d');
-    if(window.historyTrendChartInstance) window.historyTrendChartInstance.destroy();
-    window.historyTrendChartInstance = new Chart(ctx2, {
-        type: 'line',
-        data: {
-            labels: labels,
-            datasets: [{
-                label: '歷年總獎金成長趨勢',
-                data: data,
-                borderColor: '#e74c3c',
-                borderWidth: 3,
-                fill: false,
-                tension: 0.1,
-                pointRadius: 6,
-                pointBackgroundColor: '#e74c3c'
-            }]
-        },
-        options: {
-            maintainAspectRatio: false,
-            plugins: {
-                legend: { position: 'top' },
-                datalabels: { display: true, align: 'top', formatter: v => v.toLocaleString() }
-            },
-            scales: { y: { beginAtZero: true } }
-        }
-    });
-}
 
     async function askPassword() {
         const pwd = prompt("主管授權密碼");
@@ -432,121 +420,53 @@ function renderTrendChart(labels, data) {
     }
 
     function renderReportCharts(data) {
-    const canvasBar = document.getElementById('printBarChart');
-    const canvasLine = document.getElementById('printLineChart');
-    
-    if (!canvasBar || !canvasLine) return;
-
-    const ctxBar = canvasBar.getContext('2d');
-    const ctxLine = canvasLine.getContext('2d'); // 💡 確保折線圖畫布被正確抓取
-    
-    const sortedData = data.sort((a, b) => a.year - b.year);
-    const labels = sortedData.map(d => d.year + "年");
-
-    // --- 長條圖：顏色說明移至左側 ---
-    new Chart(ctxBar, {
-        type: 'bar',
-        data: {
-            labels: labels,
-            datasets: [
-                { label: '三節', data: sortedData.map(d => d.f1 + d.f2 + d.f3), backgroundColor: '#3498db' },
-                { label: '年終', data: sortedData.map(d => d.ye), backgroundColor: '#27ae60' },
-                { label: '專案', data: sortedData.map(d => d.proj), backgroundColor: '#e67e22' }
-            ]
-        },
-        options: { 
-            responsive: true, 
-            maintainAspectRatio: false,
-            layout: { padding: { top: 40 } },
-            plugins: { 
-                legend: { position: 'left' }, // 💡 移至左側，不再遮擋上方金額
-                datalabels: { display: true, anchor: 'end', align: 'top', font: { weight: 'bold' } }
-            },
-            scales: { y: { beginAtZero: true, stacked: false } }
-        }
-    });
-
-    // --- 折線圖：重新啟動趨勢顯示 ---
-    new Chart(ctxLine, {
-        type: 'line',
-        data: {
-            labels: labels,
-            datasets: [{
-                label: '總獎金成長趨勢',
-                data: sortedData.map(d => d.total),
-                borderColor: '#e74c3c',
-                borderWidth: 3,
-                fill: false,
-                tension: 0.1,
-                pointRadius: 6,
-                pointBackgroundColor: '#e74c3c'
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            layout: { padding: { top: 30 } },
-            plugins: {
-                legend: { position: 'left' },
-                datalabels: { display: true, align: 'top' }
-            },
-            scales: { y: { beginAtZero: true } }
-        }
-    });
-}
+        const canvasBar = document.getElementById('printBarChart');
+        const canvasLine = document.getElementById('printLineChart');
+        if (!canvasBar || !canvasLine) return;
+        const ctxBar = canvasBar.getContext('2d');
+        const ctxLine = canvasLine.getContext('2d');
+        const sortedData = data.sort((a, b) => a.year - b.year);
+        const labels = sortedData.map(d => d.year + "年");
+        new Chart(ctxBar, { type: 'bar', data: { labels: labels, datasets: [ { label: '三節', data: sortedData.map(d => d.f1 + d.f2 + d.f3), backgroundColor: '#3498db' }, { label: '年終', data: sortedData.map(d => d.ye), backgroundColor: '#27ae60' }, { label: '專案', data: sortedData.map(d => d.proj), backgroundColor: '#e67e22' } ] }, options: { responsive: true, maintainAspectRatio: false, layout: { padding: { top: 40 } }, plugins: { legend: { position: 'left' }, datalabels: { display: true, anchor: 'end', align: 'top', font: { weight: 'bold' } } }, scales: { y: { beginAtZero: true, stacked: false } } } });
+        new Chart(ctxLine, { type: 'line', data: { labels: labels, datasets: [{ label: '總獎金成長趨勢', data: sortedData.map(d => d.total), borderColor: '#e74c3c', borderWidth: 3, fill: false, tension: 0.1, pointRadius: 6, pointBackgroundColor: '#e74c3c' }] }, options: { responsive: true, maintainAspectRatio: false, layout: { padding: { top: 30 } }, plugins: { legend: { position: 'left' }, datalabels: { display: true, align: 'top' } }, scales: { y: { beginAtZero: true } } } });
+    }
 
     async function handleFinalSave() {
-    // 💡 輔助函式：只抓取標籤內的數字，過濾掉「試算參考：」或逗號
-    const getNumFromLabel = (id) => {
-        const el = document.getElementById(id);
-        if (!el) return 0;
-        // 使用正則表達式只保留數字、負號與小數點
-        return parseFloat(el.innerText.replace(/[^0-9.-]+/g, "")) || 0;
-    };
+        const getNumFromLabel = (id) => {
+            const el = document.getElementById(id);
+            return el ? (parseFloat(el.innerText.replace(/[^0-9.-]+/g, "")) || 0) : 0;
+        };
+        const refF1 = getNumFromLabel('ref_f1');
+        const refF2 = getNumFromLabel('ref_f2');
+        const refF3 = getNumFromLabel('ref_f3');
+        const refYe = getNumFromLabel('ref_ye');
+        const refProj = getNumFromLabel('ref_proj');
 
-    const refF1 = getNumFromLabel('ref_f1');
-    const refF2 = getNumFromLabel('ref_f2');
-    const refF3 = getNumFromLabel('ref_f3');
-    const refYe = getNumFromLabel('ref_ye');
-    const refProj = getNumFromLabel('ref_proj');
+        const data = { 
+            action: "saveRecord", 
+            year: document.getElementById('calcYear').value, 
+            empName: document.getElementById('selEmp').value, 
+            rank: timelineData.Q4.r, 
+            avgScore: document.getElementById('avgSpan').innerText, 
+            f1_base: refF1, f2_base: refF2, f3_base: refF3, ye_base: refYe, 
+            proj_final_base: document.getElementById('adj_proj_base').value, 
+            f1_adj: parseFloat(document.getElementById('target_f1').value) - refF1, 
+            f2_adj: parseFloat(document.getElementById('target_f2').value) - refF2, 
+            f3_adj: parseFloat(document.getElementById('target_f3').value) - refF3, 
+            ye_adj: parseFloat(document.getElementById('target_ye').value) - refYe, 
+            proj_adj: parseFloat(document.getElementById('target_proj').value) - refProj, 
+            total: document.getElementById('totalCell').innerText.replace(/,/g,''), 
+            timeline: timelineData, 
+            scores: Array.from(document.querySelectorAll('.ann-in')).map(i=>i.value), 
+            projScores: Array.from(document.querySelectorAll('.prj-in')).map(i=>i.value) 
+        };
 
-    // 💡 自動回推調整項 (定案獎金 - 參考值)
-    const data = { 
-        action: "saveRecord", 
-        year: document.getElementById('calcYear').value, 
-        empName: document.getElementById('selEmp').value, 
-        rank: timelineData.Q4.r, 
-        avgScore: document.getElementById('avgSpan').innerText, 
-        
-        // 儲存當下的底碼
-        f1_base: refF1, 
-        f2_base: refF2, 
-        f3_base: refF3, 
-        ye_base: refYe, 
-        proj_final_base: document.getElementById('adj_proj_base').value, 
-        
-        // 儲存回推後的差額 (調整項)
-        f1_adj: parseFloat(document.getElementById('target_f1').value) - refF1, 
-        f2_adj: parseFloat(document.getElementById('target_f2').value) - refF2, 
-        f3_adj: parseFloat(document.getElementById('target_f3').value) - refF3, 
-        ye_adj: parseFloat(document.getElementById('target_ye').value) - refYe, 
-        proj_adj: parseFloat(document.getElementById('target_proj').value) - refProj, 
-        
-        total: document.getElementById('totalCell').innerText.replace(/,/g,''), 
-        timeline: timelineData, 
-        scores: Array.from(document.querySelectorAll('.ann-in')).map(i=>i.value), 
-        projScores: Array.from(document.querySelectorAll('.prj-in')).map(i=>i.value) 
-    };
-
-    try {
-        await fetch(API_URL, { method: "POST", body: JSON.stringify(data) });
-        alert("✅ 儲存成功！歷史發放金額已鎖定。");
-        updateHistoryCharts();
-    } catch (err) {
-        alert("❌ 儲存失敗，請檢查網路連線。");
-        console.error(err);
+        try {
+            await fetch(API_URL, { method: "POST", body: JSON.stringify(data) });
+            alert("✅ 儲存成功！歷史發放金額已鎖定。");
+            updateHistoryCharts();
+        } catch (err) { alert("❌ 儲存失敗"); }
     }
-}
 
     function downloadChart(chartId, bName) {
         const canvas = document.getElementById(chartId); const link = document.createElement('a');
