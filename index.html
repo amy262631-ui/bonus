@@ -332,43 +332,57 @@
         const ctx1 = document.getElementById('historyCompareChart').getContext('2d');
         if(historyCompareChart) historyCompareChart.destroy();
 
-        historyCompareChart = new Chart(ctx1, {
-            type: 'bar',
-            data: {
-                labels: sortedHistory.map(d => d.year + '年'),
-                datasets: [
-                    {
-                        label: '試算參考 (底碼)',
-                        data: sortedHistory.map(d => d.f1_base + d.f2_base + d.f3_base + d.ye_base), // 這裡需後端回傳 base
-                        backgroundColor: 'rgba(52, 152, 219, 0.5)', // 淺藍色
-                        stack: 'Stack 0',
-                    },
-                    {
-                        label: '公司加給 (定案差額)',
-                        data: sortedHistory.map(d => d.total - (d.f1_base + d.f2_base + d.f3_base + d.ye_base)), 
-                        backgroundColor: 'rgba(231, 76, 60, 0.8)', // 紅色表示加給
-                        stack: 'Stack 0',
-                    }
-                ]
+       // 網頁下方主管區的雙色長條圖邏輯
+historyCompareChart = new Chart(ctx1, {
+    type: 'bar',
+    data: {
+        labels: sortedHistory.map(d => d.year + '年'),
+        datasets: [
+            {
+                label: '試算參考 (底碼)',
+                data: sortedHistory.map(d => d.f1_base + d.f2_base + d.f3_base + d.ye_base), 
+                backgroundColor: 'rgba(52, 152, 219, 0.6)', // 淺藍色
+                stack: 'combined'
             },
-            options: {
-                maintainAspectRatio: false,
-                plugins: {
-                    tooltip: { callbacks: { label: (c) => c.dataset.label + ": " + c.raw.toLocaleString() } },
-                    datalabels: { display: true, anchor: 'end', align: 'top', formatter: (v, ctx) => {
-                        // 僅在最上方顯示總額標籤
-                        if (ctx.datasetIndex === 1) {
-                            const total = ctx.chart.data.datasets[0].data[ctx.dataIndex] + v;
-                            return total.toLocaleString();
-                        }
-                        return null;
-                    }}
-                },
-                scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true } }
+            {
+                label: '公司加給 (定案差額)',
+                // 公式：總額 - (試算總額 + 專案)
+                data: sortedHistory.map(d => d.total - (d.f1_base + d.f2_base + d.f3_base + d.ye_base + d.proj)), 
+                backgroundColor: 'rgba(231, 76, 60, 0.8)', // 紅色表示額外給予
+                stack: 'combined'
+            },
+            {
+                label: '專案獎金',
+                data: sortedHistory.map(d => d.proj), 
+                backgroundColor: 'rgba(230, 126, 34, 0.8)', // 專案橘色
+                stack: 'combined'
             }
-        });
+        ]
+    },
+    options: {
+        maintainAspectRatio: false,
+        plugins: {
+            legend: { position: 'top' }, // 網頁版維持上方說明
+            datalabels: { 
+                display: true, 
+                anchor: 'end', 
+                align: 'top', 
+                formatter: (v, ctx) => {
+                    // 僅在最頂層顯示總金額數字
+                    if (ctx.datasetIndex === ctx.chart.data.datasets.length - 1) {
+                        let total = 0;
+                        for(let i=0; i<ctx.chart.data.datasets.length; i++) {
+                            total += ctx.chart.data.datasets[i].data[ctx.dataIndex];
+                        }
+                        return total.toLocaleString();
+                    }
+                    return null;
+                }
+            }
+        },
+        scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true } }
     }
-}
+});
 
     async function askPassword() {
         const pwd = prompt("主管授權密碼");
@@ -494,10 +508,19 @@
  * 新增：個人報表專用的圖表渲染函式
  */
 function renderReportCharts(data) {
-    const ctxBar = document.getElementById('printBarChart').getContext('2d');
-    const sortedData = data.sort((a,b) => a.year - b.year);
+    const canvasBar = document.getElementById('printBarChart');
+    const canvasLine = document.getElementById('printLineChart');
+    
+    // 確保 Canvas 存在才執行
+    if (!canvasBar || !canvasLine) return;
+
+    const ctxBar = canvasBar.getContext('2d');
+    const ctxLine = canvasLine.getContext('2d'); // 💡 修正：確保 ctxLine 被正確定義
+    
+    const sortedData = data.sort((a, b) => a.year - b.year);
     const labels = sortedData.map(d => d.year + "年");
 
+    // --- 1. 個人報表長條圖 ---
     new Chart(ctxBar, {
         type: 'bar',
         data: {
@@ -511,18 +534,16 @@ function renderReportCharts(data) {
         options: { 
             responsive: true, 
             maintainAspectRatio: false,
-            layout: { padding: { top: 30 } }, // 增加頂部空間，防止標籤被切到
+            layout: { padding: { top: 40 } }, // 💡 增加頂部空間防止數字被切
             plugins: { 
-                legend: { position: 'bottom' }, // 將顏色說明移到下方，避免擋住中間獎金數字
-                datalabels: { display: true, anchor:'end', align:'top', font: { weight: 'bold' } }
+                legend: { position: 'left' }, // 💡 說明移到左邊，不再遮擋中間金額
+                datalabels: { display: true, anchor: 'end', align: 'top', font: { weight: 'bold' } }
             },
-            scales: { 
-                y: { beginAtZero: true, ticks: { padding: 10 } } 
-            } 
+            scales: { y: { beginAtZero: true, stacked: false } } // 💡 讓長條都從 0 開始
         }
     });
 
-    // 渲染折線圖
+    // --- 2. 個人報表折線圖 (修正後) ---
     new Chart(ctxLine, {
         type: 'line',
         data: {
@@ -538,10 +559,14 @@ function renderReportCharts(data) {
                 pointBackgroundColor: '#e74c3c'
             }]
         },
-        options: { 
-            responsive: true, 
+        options: {
+            responsive: true,
             maintainAspectRatio: false,
-            plugins: { datalabels: { display: true, align:'top' } },
+            layout: { padding: { top: 30 } },
+            plugins: {
+                legend: { position: 'left' },
+                datalabels: { display: true, align: 'top' }
+            },
             scales: { y: { beginAtZero: true } }
         }
     });
