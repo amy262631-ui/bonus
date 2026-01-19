@@ -242,15 +242,62 @@
     }
 
     async function updateHistoryCharts() {
-        const res = await fetch(API_URL, { method: "POST", body: JSON.stringify({ action: "getHistoryComparison", empName: document.getElementById('selEmp').value }) });
-        const r = await res.json();
-        if(r.status === "success" && r.history.length > 0) {
-            const sortedHistory = r.history.sort((a, b) => a.year - b.year);
-            const ctx1 = document.getElementById('historyCompareChart').getContext('2d');
-            if(historyCompareChart) historyCompareChart.destroy();
-            historyCompareChart = new Chart(ctx1, { type: 'bar', data: { labels: sortedHistory.map(d => d.year + '年'), datasets: [{ label: '試算參考 (底碼)', data: sortedHistory.map(d => d.f1_base + d.f2_base + d.f3_base + d.ye_base), backgroundColor: 'rgba(52, 152, 219, 0.6)', stack: 'combined' }, { label: '公司加給 (定案差額)', data: sortedHistory.map(d => d.total - (d.f1_base + d.f2_base + d.f3_base + d.ye_base + d.proj)), backgroundColor: 'rgba(231, 76, 60, 0.8)', stack: 'combined' }, { label: '專案獎金', data: sortedHistory.map(d => d.proj), backgroundColor: 'rgba(230, 126, 34, 0.8)', stack: 'combined' } ] }, options: { maintainAspectRatio: false, plugins: { legend: { position: 'top' }, datalabels: { display: true, anchor: 'end', align: 'top', formatter: (v, ctx) => { if (ctx.datasetIndex === ctx.chart.data.datasets.length - 1) { let total = 0; for(let i=0; i<ctx.chart.data.datasets.length; i++) { total += ctx.chart.data.datasets[i].data[ctx.dataIndex]; } return total.toLocaleString(); } return null; } } }, scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true } } } });
-        }
+    const res = await fetch(API_URL, { method: "POST", body: JSON.stringify({ action: "getHistoryComparison", empName: document.getElementById('selEmp').value }) });
+    const r = await res.json();
+    
+    if(r.status === "success" && r.history.length > 0) {
+        const sortedHistory = r.history.sort((a, b) => a.year - b.year);
+        const ctx1 = document.getElementById('historyCompareChart').getContext('2d');
+        if(historyCompareChart) historyCompareChart.destroy();
+
+        historyCompareChart = new Chart(ctx1, {
+            type: 'bar',
+            data: {
+                labels: sortedHistory.map(d => d.year + '年'),
+                datasets: [
+                    {
+                        label: '試算參考 (底碼)',
+                        data: sortedHistory.map(d => parseFloat(d.f1_base || 0) + parseFloat(d.f2_base || 0) + parseFloat(d.f3_base || 0) + parseFloat(d.ye_base || 0)), 
+                        backgroundColor: 'rgba(52, 152, 219, 0.6)',
+                        stack: 'combined'
+                    },
+                    {
+                        label: '公司加給 (定案差額)',
+                        data: sortedHistory.map(d => parseFloat(d.total || 0) - (parseFloat(d.f1_base || 0) + parseFloat(d.f2_base || 0) + parseFloat(d.f3_base || 0) + parseFloat(d.ye_base || 0) + parseFloat(d.proj || 0))), 
+                        backgroundColor: 'rgba(231, 76, 60, 0.8)',
+                        stack: 'combined'
+                    },
+                    {
+                        label: '專案獎金',
+                        data: sortedHistory.map(d => parseFloat(d.proj || 0)), 
+                        backgroundColor: 'rgba(230, 126, 34, 0.8)',
+                        stack: 'combined'
+                    }
+                ]
+            },
+            options: {
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { position: 'top' },
+                    datalabels: { 
+                        display: true, anchor: 'end', align: 'top', 
+                        formatter: (v, ctx) => {
+                            if (ctx.datasetIndex === ctx.chart.data.datasets.length - 1) {
+                                let total = 0;
+                                for(let i=0; i<ctx.chart.data.datasets.length; i++) {
+                                    total += parseFloat(ctx.chart.data.datasets[i].data[ctx.dataIndex] || 0);
+                                }
+                                return total.toLocaleString();
+                            }
+                            return null;
+                        }
+                    }
+                },
+                scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true } }
+            }
+        });
     }
+}
 
     async function askPassword() {
         const pwd = prompt("主管授權密碼");
@@ -294,16 +341,68 @@
     }
 
     function renderReportCharts(data) {
-        const canvasBar = document.getElementById('printBarChart');
-        const canvasLine = document.getElementById('printLineChart');
-        if (!canvasBar || !canvasLine) return;
-        const ctxBar = canvasBar.getContext('2d');
-        const ctxLine = canvasLine.getContext('2d');
-        const sortedData = data.sort((a,b) => a.year - b.year);
-        const labels = sortedData.map(d => d.year + "年");
-        new Chart(ctxBar, { type: 'bar', data: { labels: labels, datasets: [ { label: '三節', data: sortedData.map(d => d.f1 + d.f2 + d.f3), backgroundColor: '#3498db' }, { label: '年終', data: sortedData.map(d => d.ye), backgroundColor: '#27ae60' }, { label: '專案', data: sortedData.map(d => d.proj), backgroundColor: '#e67e22' } ] }, options: { responsive: true, maintainAspectRatio: false, layout: { padding: { top: 40 } }, plugins: { legend: { position: 'left' }, datalabels: { display: true, anchor: 'end', align: 'top', font: { weight: 'bold' } } }, scales: { y: { beginAtZero: true, stacked: false } } } });
-        new Chart(ctxLine, { type: 'line', data: { labels: labels, datasets: [{ label: '總獎金成長趨勢', data: sortedData.map(d => d.total), borderColor: '#e74c3c', borderWidth: 3, fill: false, tension: 0.1, pointRadius: 6, pointBackgroundColor: '#e74c3c' }] }, options: { responsive: true, maintainAspectRatio: false, layout: { padding: { top: 30 } }, plugins: { legend: { position: 'left' }, datalabels: { display: true, align: 'top' } }, scales: { y: { beginAtZero: true } } } });
-    }
+    const canvasBar = document.getElementById('printBarChart');
+    const canvasLine = document.getElementById('printLineChart');
+    
+    if (!canvasBar || !canvasLine) return;
+
+    const ctxBar = canvasBar.getContext('2d');
+    const ctxLine = canvasLine.getContext('2d'); // 💡 確保折線圖畫布被正確抓取
+    
+    const sortedData = data.sort((a, b) => a.year - b.year);
+    const labels = sortedData.map(d => d.year + "年");
+
+    // --- 長條圖：顏色說明移至左側 ---
+    new Chart(ctxBar, {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [
+                { label: '三節', data: sortedData.map(d => d.f1 + d.f2 + d.f3), backgroundColor: '#3498db' },
+                { label: '年終', data: sortedData.map(d => d.ye), backgroundColor: '#27ae60' },
+                { label: '專案', data: sortedData.map(d => d.proj), backgroundColor: '#e67e22' }
+            ]
+        },
+        options: { 
+            responsive: true, 
+            maintainAspectRatio: false,
+            layout: { padding: { top: 40 } },
+            plugins: { 
+                legend: { position: 'left' }, // 💡 移至左側，不再遮擋上方金額
+                datalabels: { display: true, anchor: 'end', align: 'top', font: { weight: 'bold' } }
+            },
+            scales: { y: { beginAtZero: true, stacked: false } }
+        }
+    });
+
+    // --- 折線圖：重新啟動趨勢顯示 ---
+    new Chart(ctxLine, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: '總獎金成長趨勢',
+                data: sortedData.map(d => d.total),
+                borderColor: '#e74c3c',
+                borderWidth: 3,
+                fill: false,
+                tension: 0.1,
+                pointRadius: 6,
+                pointBackgroundColor: '#e74c3c'
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            layout: { padding: { top: 30 } },
+            plugins: {
+                legend: { position: 'left' },
+                datalabels: { display: true, align: 'top' }
+            },
+            scales: { y: { beginAtZero: true } }
+        }
+    });
+}
 
     async function handleFinalSave() {
         const data = { action: "saveRecord", year: document.getElementById('calcYear').value, empName: document.getElementById('selEmp').value, rank: timelineData.Q4.r, avgScore: document.getElementById('avgSpan').innerText, f1_base: document.getElementById('ref_f1').innerText.replace('試算參考：','').replace(',',''), f1_adj: parseFloat(document.getElementById('target_f1').value) - (parseFloat(document.getElementById('ref_f1').innerText.replace('試算參考：','').replace(',','')) || 0), f2_base: document.getElementById('ref_f2').innerText.replace('試算參考：','').replace(',',''), f2_adj: parseFloat(document.getElementById('target_f2').value) - (parseFloat(document.getElementById('ref_f2').innerText.replace('試算參考：','').replace(',','')) || 0), f3_base: document.getElementById('ref_f3').innerText.replace('試算參考：','').replace(',',''), f3_adj: parseFloat(document.getElementById('target_f3').value) - (parseFloat(document.getElementById('ref_f3').innerText.replace('試算參考：','').replace(',','')) || 0), ye_base: document.getElementById('ref_ye').innerText.replace('試算參考：','').replace(',',''), ye_adj: parseFloat(document.getElementById('target_ye').value) - (parseFloat(document.getElementById('ref_ye').innerText.replace('試算參考：','').replace(',','')) || 0), proj_final_base: document.getElementById('adj_proj_base').value, proj_adj: parseFloat(document.getElementById('target_proj').value) - (parseFloat(document.getElementById('ref_proj').innerText.replace('試算：','').replace(',','')) || 0), total: document.getElementById('totalCell').innerText.replace(/,/g,''), timeline: timelineData, scores: Array.from(document.querySelectorAll('.ann-in')).map(i=>i.value), projScores: Array.from(document.querySelectorAll('.prj-in')).map(i=>i.value) };
