@@ -254,12 +254,32 @@
         const projCalc = Math.round(currentAdjs[4] * (baseResults.projMult || 0));
 
         let html = `<tr><td>${document.getElementById('selEmp').value}</td><td>${document.getElementById('calcYear').value}</td><td style="color:blue;font-weight:bold;">${avg}</td>`;
+        
+        // 處理 Q1, Q2, Q3
         ['Q1','Q2','Q3'].forEach((q, i) => {
             const ref = calcRef(q, i);
-            html += `<td><span class="reference-text" id="ref_f${i+1}">試算參考：${ref.toLocaleString()}</span><input type="number" class="target-input" id="target_f${i+1}" value="${Math.round(ref+currentAdjs[i])}" oninput="refreshTotal()"></td>`;
+            html += `<td>
+                <span class="reference-text" id="ref_f${i+1}">試算參考：${ref.toLocaleString()}</span>
+                <span class="target-label">定案獎金：</span>
+                <input type="number" class="target-input" id="target_f${i+1}" value="${Math.round(ref+currentAdjs[i])}" oninput="refreshTotal()">
+            </td>`;
         });
-        html += `<td><span class="reference-text" id="ref_ye">試算參考：${yeRef.toLocaleString()}</span><input type="number" class="target-input" id="target_ye" value="${Math.round(yeRef+currentAdjs[3])}" oninput="refreshTotal()"></td>`;
-        html += `<td>基數:<input type="number" id="adj_proj_base" value="${currentAdjs[4]}" oninput="runLiveCalc()" style="width:65px;"><br><span class="reference-text" id="ref_proj">試算：${projCalc.toLocaleString()}</span><input type="number" class="target-input" id="target_proj" value="${Math.round(projCalc+currentAdjs[5])}" oninput="refreshTotal()"></td>`;
+
+        // 處理年終 (ye)
+        html += `<td>
+            <span class="reference-text" id="ref_ye">試算參考：${yeRef.toLocaleString()}</span>
+            <span class="target-label">定案獎金：</span>
+            <input type="number" class="target-input" id="target_ye" value="${Math.round(yeRef+currentAdjs[3])}" oninput="refreshTotal()">
+        </td>`;
+
+        // 處理專案 (proj)
+        html += `<td>
+            基數:<input type="number" id="adj_proj_base" value="${currentAdjs[4]}" oninput="runLiveCalc()" style="width:65px;"><br>
+            <span class="reference-text" id="ref_proj">試算：${projCalc.toLocaleString()}</span>
+            <span class="target-label">定案獎金：</span>
+            <input type="number" class="target-input" id="target_proj" value="${Math.round(projCalc+currentAdjs[5])}" oninput="refreshTotal()">
+        </td>`;
+
         html += `<td id="totalCell" class="total-cell">0</td></tr>`;
         
         rb.innerHTML = html;
@@ -454,7 +474,7 @@ function renderReportCharts(data) {
     const sortedData = data.sort((a,b) => a.year - b.year);
     const labels = sortedData.map(d => d.year + "年");
 
-    // 渲染長條圖
+   // 1. 歷年獎金組成分析 (長條圖)
     new Chart(ctxBar, {
         type: 'bar',
         data: {
@@ -468,8 +488,16 @@ function renderReportCharts(data) {
         options: { 
             responsive: true, 
             maintainAspectRatio: false,
-            plugins: { datalabels: { display: true, anchor:'end', align:'top' } },
-            scales: { y: { stacked: true, beginAtZero: true } } 
+            plugins: { 
+                datalabels: { display: true, anchor:'end', align:'top' } 
+            },
+            scales: { 
+                x: { stacked: false }, // 確保 X 軸不堆疊
+                y: { 
+                    stacked: false,    // 修正：將堆疊設為 false，讓長條圖回歸 0 基準線
+                    beginAtZero: true  // 確保從 0 開始
+                } 
+            } 
         }
     });
 
