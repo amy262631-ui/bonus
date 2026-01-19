@@ -400,18 +400,17 @@ historyCompareChart = new Chart(ctx1, {
         document.getElementById('totalCell').innerText = t.toLocaleString();
     }
 
-   async function openReport(mode) {
+  async function openReport(mode) {
     const inner = document.getElementById('reportInner');
     const name = document.getElementById('selEmp').value;
     
-    // 根據模式決定 API 請求參數
     const payload = mode === 'all' ? { action: "getHistoryComparison" } : { action: "getHistoryComparison", empName: name };
     
     const res = await fetch(API_URL, { method: "POST", body: JSON.stringify(payload) });
     const r = await res.json();
     
     if (mode === 'all') {
-        // --- 1. 全體總表模式：每 3 年一頁，Excel 框線 ---
+        // --- 1. 全體總表：3年一頁，Excel框線 ---
         const grouped = r.history.reduce((acc, curr) => {
             if (!acc[curr.year]) acc[curr.year] = [];
             acc[curr.year].push(curr);
@@ -455,7 +454,7 @@ historyCompareChart = new Chart(ctx1, {
         inner.innerHTML = fullHtml;
 
     } else {
-        // --- 2. 個人報表模式：歷年明細 + 表格下方嵌入圖表 ---
+        // --- 2. 個人報表：歷年明細 + 下方嵌入圖表 ---
         let html = `
         <div class="report-page">
             <h2 style="text-align:center; margin-bottom: 20px;">${name} - 歷年獎金績效明細報告</h2>
@@ -482,11 +481,11 @@ historyCompareChart = new Chart(ctx1, {
             </table>
             
             <div class="report-charts" style="margin-top: 40px; display: flex; flex-direction: column; gap: 50px;">
-                <div style="width:100%; height:300px; text-align:center;">
+                <div class="chart-box">
                     <h3 style="font-size:1.1rem; margin-bottom:10px;">🏆 歷年獎金組成分析 (長條圖)</h3>
                     <canvas id="printBarChart"></canvas>
                 </div>
-                <div style="width:100%; height:300px; text-align:center;">
+                <div class="chart-box">
                     <h3 style="font-size:1.1rem; margin-bottom:10px;">📈 歷年總獎金趨勢 (折線圖)</h3>
                     <canvas id="printLineChart"></canvas>
                 </div>
@@ -495,32 +494,26 @@ historyCompareChart = new Chart(ctx1, {
         
         inner.innerHTML = html;
 
-        // 必須延遲渲染圖表，確保 HTML 已經放入 DOM
+        // 💡 延遲渲染確保 Canvas 已經出現在網頁上
         setTimeout(() => {
             renderReportCharts(r.history);
-        }, 300);
+        }, 500);
     }
     
     document.getElementById('reportModal').style.display = 'block';
 }
 
-/**
- * 新增：個人報表專用的圖表渲染函式
- */
 function renderReportCharts(data) {
     const canvasBar = document.getElementById('printBarChart');
     const canvasLine = document.getElementById('printLineChart');
-    
-    // 確保 Canvas 存在才執行
     if (!canvasBar || !canvasLine) return;
 
     const ctxBar = canvasBar.getContext('2d');
-    const ctxLine = canvasLine.getContext('2d'); // 💡 修正：確保 ctxLine 被正確定義
-    
-    const sortedData = data.sort((a, b) => a.year - b.year);
+    const ctxLine = canvasLine.getContext('2d');
+    const sortedData = data.sort((a,b) => a.year - b.year);
     const labels = sortedData.map(d => d.year + "年");
 
-    // --- 1. 個人報表長條圖 ---
+    // 1. 個人報表長條圖
     new Chart(ctxBar, {
         type: 'bar',
         data: {
@@ -534,16 +527,16 @@ function renderReportCharts(data) {
         options: { 
             responsive: true, 
             maintainAspectRatio: false,
-            layout: { padding: { top: 40 } }, // 💡 增加頂部空間防止數字被切
+            layout: { padding: { top: 40 } },
             plugins: { 
-                legend: { position: 'left' }, // 💡 說明移到左邊，不再遮擋中間金額
+                legend: { position: 'left' }, // 💡 移到左邊避開金額
                 datalabels: { display: true, anchor: 'end', align: 'top', font: { weight: 'bold' } }
             },
-            scales: { y: { beginAtZero: true, stacked: false } } // 💡 讓長條都從 0 開始
+            scales: { y: { beginAtZero: true, stacked: false } }
         }
     });
 
-    // --- 2. 個人報表折線圖 (修正後) ---
+    // 2. 個人報表折線圖
     new Chart(ctxLine, {
         type: 'line',
         data: {
