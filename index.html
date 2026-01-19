@@ -142,16 +142,27 @@
     };
 
     function initUI() {
-        const sel = document.getElementById('selEmp');
-        const opt = sel.options[sel.selectedIndex];
-        const isL1 = opt.dataset.rank === 'L1';
-        let h1 = '', h2 = '';
-        for(let i=1; i<=(isL1?12:4); i++) h1 += `<div class="input-group"><span class="input-label">${isL1?i+'月':'Q'+i}</span><input type="number" class="q-score ann-in" oninput="runLiveCalc()"></div>`;
-        for(let i=1; i<=12; i++) h2 += `<div class="input-group"><span class="input-label">${i}月</span><input type="number" class="q-score prj-in" oninput="runLiveCalc()"></div>`;
-        document.getElementById('annualInputs').innerHTML = h1; document.getElementById('projInputs').innerHTML = h2;
-        timelineData = { Q1:{r:opt.dataset.rank, s:opt.dataset.salary}, Q2:{r:opt.dataset.rank, s:opt.dataset.salary}, Q3:{r:opt.dataset.rank, s:opt.dataset.salary}, Q4:{r:opt.dataset.rank, s:opt.dataset.salary} };
-        autoCalc(true); 
-    }
+    const sel = document.getElementById('selEmp');
+    const opt = sel.options[sel.selectedIndex];
+    const isL1 = opt.dataset.rank === 'L1';
+    
+    // 💡 核心修正：換人時先徹底重設 timelineData，防止抓到上一人的職等薪資
+    timelineData = { 
+        Q1:{r:opt.dataset.rank, s:opt.dataset.salary}, 
+        Q2:{r:opt.dataset.rank, s:opt.dataset.salary}, 
+        Q3:{r:opt.dataset.rank, s:opt.dataset.salary}, 
+        Q4:{r:opt.dataset.rank, s:opt.dataset.salary} 
+    };
+
+    let h1 = '', h2 = '';
+    for(let i=1; i<=(isL1?12:4); i++) h1 += `<div class="input-group"><span class="input-label">${isL1?i+'月':'Q'+i}</span><input type="number" class="q-score ann-in" oninput="runLiveCalc()"></div>`;
+    for(let i=1; i<=12; i++) h2 += `<div class="input-group"><span class="input-label">${i}月</span><input type="number" class="q-score prj-in" oninput="runLiveCalc()"></div>`;
+    
+    document.getElementById('annualInputs').innerHTML = h1; 
+    document.getElementById('projInputs').innerHTML = h2;
+    
+    autoCalc(true); // 執行自動載入
+}
 
     function runLiveCalc() {
         const getAvg = (cls) => {
@@ -165,23 +176,47 @@
     }
 
     async function autoCalc(forceSync = false) {
-        if (isUserTyping && !forceSync) return;
-        const payload = { action: "calculateBonus", empName: document.getElementById('selEmp').value, year: document.getElementById('calcYear').value, scores: Array.from(document.querySelectorAll('.ann-in')).map(i => i.value||null), timeline: timelineData, avgScore: document.getElementById('avgSpan').innerText, projAvg: document.getElementById('projAvgSpan').innerText };
-        const res = await fetch(API_URL, { method: "POST", body: JSON.stringify(payload) });
-        const r = await res.json();
-        if(r.status === "success") {
-            if(forceSync) {
-                if(r.historyScores) document.querySelectorAll('.ann-in').forEach((el,i) => el.value = r.historyScores[i]);
-                if(r.historyProjScores) document.querySelectorAll('.prj-in').forEach((el,i) => el.value = r.historyProjScores[i]);
-                if(r.historyTimeline) timelineData = r.historyTimeline;
-                runLiveCalc();
-            }
-            baseResults = r.data;
-            renderTimelineUI();
-            updateAdminTableUI(r.historyAdjs || [0,0,0,0,80000,0]);
-            updateHistoryCharts();
+    if (isUserTyping && !forceSync) return;
+
+    // 💡 核心修正：在讀取新年度/新人員資料前，先清空畫面上所有輸入框
+    if(forceSync) {
+        document.querySelectorAll('.ann-in, .prj-in').forEach(i => i.value = "");
+        if(document.getElementById('resultBody')) {
+            document.getElementById('resultBody').innerHTML = ""; // 先清空主管區
         }
     }
+
+    const payload = { 
+        action: "calculateBonus", 
+        empName: document.getElementById('selEmp').value, 
+        year: document.getElementById('calcYear').value, 
+        scores: Array.from(document.querySelectorAll('.ann-in')).map(i => i.value||null), 
+        timeline: timelineData, 
+        avgScore: document.getElementById('avgSpan').innerText, 
+        projAvg: document.getElementById('projAvgSpan').innerText 
+    };
+
+    const res = await fetch(API_URL, { method: "POST", body: JSON.stringify(payload) });
+    const r = await res.json();
+
+    if(r.status === "success") {
+        if(forceSync) {
+            // 如果後端有歷史分數，才填入；否則維持清空狀態
+            if(r.historyScores && r.historyScores.length > 0) {
+                document.querySelectorAll('.ann-in').forEach((el,i) => el.value = r.historyScores[i] || "");
+            }
+            if(r.historyProjScores && r.historyProjScores.length > 0) {
+                document.querySelectorAll('.prj-in').forEach((el,i) => el.value = r.historyProjScores[i] || "");
+            }
+            if(r.historyTimeline) timelineData = r.historyTimeline;
+            runLiveCalc(); // 填完資料後重新計算
+        }
+        baseResults = r.data;
+        renderTimelineUI();
+        updateAdminTableUI(r.historyAdjs || [0,0,0,0,80000,0]);
+        updateHistoryCharts();
+    }
+}
 
     function updateAdminTableUI(adjs = null) {
         const rb = document.getElementById('resultBody');
