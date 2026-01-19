@@ -6,54 +6,68 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
     <style>
-        /* 1. 系統主介面樣式 */
-        :root { --primary: #2c3e50; --accent: #3498db; --success: #27ae60; --danger: #e74c3c; --project: #e67e22; --bg: #f4f7f6; }
-        body { font-family: "Microsoft JhengHei", sans-serif; background: var(--bg); padding: 20px; }
-        .card { background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); margin-bottom: 25px; }
-        .header-controls { display: flex; gap: 15px; align-items: center; margin-bottom: 20px; }
-        #selEmp, #calcYear { padding: 8px 15px; border-radius: 8px; border: 1px solid #ccc; font-size: 1.1rem; }
-        
-        /* 評分輸入框優化 */
-        .score-container { display: flex; flex-direction: column; gap: 10px; padding: 15px; background: #f8f9fa; border-radius: 10px; border-left: 8px solid var(--primary); margin-bottom: 15px; }
-        .score-grid { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end; }
-        .input-group { display: flex; flex-direction: column; align-items: center; gap: 6px; }
-        .input-label { font-size: 0.85rem; color: #666; font-weight: bold; }
-        .q-score { width: 65px; height: 35px; text-align: center; font-size: 1rem; border: 1px solid #ddd; border-radius: 6px; font-weight: bold; padding: 0 4px; }
+    /* 1. 系統主介面樣式 */
+    :root { --primary: #2c3e50; --accent: #3498db; --success: #27ae60; --danger: #e74c3c; --project: #e67e22; --bg: #f4f7f6; }
+    body { font-family: "Microsoft JhengHei", sans-serif; background: var(--bg); padding: 20px; }
+    .card { background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); margin-bottom: 25px; }
+    .header-controls { display: flex; gap: 15px; align-items: center; margin-bottom: 20px; }
+    #selEmp, #calcYear { padding: 8px 15px; border-radius: 8px; border: 1px solid #ccc; font-size: 1.1rem; }
+    
+    /* 評分輸入框優化 */
+    .score-container { display: flex; flex-direction: column; gap: 10px; padding: 15px; background: #f8f9fa; border-radius: 10px; border-left: 8px solid var(--primary); margin-bottom: 15px; }
+    .score-grid { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end; }
+    .input-group { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+    .input-label { font-size: 0.85rem; color: #666; font-weight: bold; }
+    .q-score { width: 65px; height: 35px; text-align: center; font-size: 1rem; border: 1px solid #ddd; border-radius: 6px; font-weight: bold; padding: 0 4px; }
 
-        .avg-display { min-width: 150px; background: var(--primary); color: white; padding: 10px; border-radius: 8px; text-align: center; margin-left: auto; font-size: 1.1rem; font-weight: bold; }
-        
-        .target-label { color: var(--danger); font-weight: bold; font-size: 0.9rem; margin-bottom: 2px; display: block; }
-        .target-input { width: 105px; height: 40px; color: var(--danger); font-size: 1.35rem; border: 2px solid var(--danger); text-align: center; font-weight: bold; background: #fff5f5; border-radius: 6px; }
-        
-        .reference-text { color: #27ae60; font-weight: bold; font-size: 0.85rem; display: block; margin-bottom: 2px; }
-        .btn { padding: 10px 20px; border: none; border-radius: 8px; cursor: pointer; color: white; font-weight: bold; display: flex; align-items: center; gap: 5px; transition: 0.2s; }
-        .total-cell { font-size: 2.2rem; font-weight: bold; background: #fff3cd; color: #d35400; min-width: 150px; }
-        
-        #reportModal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 2000; overflow-y: auto; padding: 40px 20px; }
-        .report-content { background: white; max-width: 1100px; margin: 0 auto; padding: 40px; border-radius: 15px; position: relative; }
+    .avg-display { min-width: 150px; background: var(--primary); color: white; padding: 10px; border-radius: 8px; text-align: center; margin-left: auto; font-size: 1.1rem; font-weight: bold; }
+    
+    .target-label { color: var(--danger); font-weight: bold; font-size: 0.9rem; margin-bottom: 2px; display: block; }
+    .target-input { width: 105px; height: 40px; color: var(--danger); font-size: 1.35rem; border: 2px solid var(--danger); text-align: center; font-weight: bold; background: #fff5f5; border-radius: 6px; }
+    
+    .reference-text { color: #27ae60; font-weight: bold; font-size: 0.85rem; display: block; margin-bottom: 2px; }
+    .btn { padding: 10px 20px; border: none; border-radius: 8px; cursor: pointer; color: white; font-weight: bold; display: flex; align-items: center; gap: 5px; transition: 0.2s; }
+    .total-cell { font-size: 2.2rem; font-weight: bold; background: #fff3cd; color: #d35400; min-width: 150px; }
+    
+    /* 2. 報表視窗與內容基礎 */
+    #reportModal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 2000; overflow-y: auto; padding: 40px 20px; }
+    .report-content { background: white; max-width: 1100px; margin: 0 auto; padding: 40px; border-radius: 15px; position: relative; }
 
-        .report-page { background: white; page-break-after: always; }
-        .excel-report { width: 100%; border-collapse: collapse; margin-bottom: 30px; table-layout: fixed; }
-        .excel-report th, .excel-report td { border: 1px solid #000 !important; padding: 8px 4px; font-size: 13px; word-break: break-all; }
-        .excel-report th { background-color: #e8e8e8 !important; font-weight: bold; text-align: center; }
-        .excel-report td { text-align: right; }
-        .excel-report td:first-child { text-align: center; }
+    .report-page { background: white; page-break-after: always; }
+    .excel-report { width: 100%; border-collapse: collapse; margin-bottom: 30px; table-layout: fixed; }
+    .excel-report th, .excel-report td { border: 1px solid #000 !important; padding: 8px 4px; font-size: 13px; word-break: break-all; }
+    .excel-report th { background-color: #e8e8e8 !important; font-weight: bold; text-align: center; }
+    .excel-report td { text-align: right; }
+    .excel-report td:first-child { text-align: center; }
 
-        .report-charts { margin-top: 30px; display: flex; flex-direction: column; gap: 40px; }
-        .chart-box { width: 100%; height: 380px; text-align: center; margin-bottom: 50px; padding: 20px; border: 1px solid #eee; }
+    .report-charts { margin-top: 30px; display: flex; flex-direction: column; gap: 40px; }
+    .chart-box { width: 100%; height: 380px; text-align: center; margin-bottom: 50px; padding: 20px; border: 1px solid #eee; }
+
+    /* 3. 平板與手機端的響應式優化 (新增) */
+    @media (max-width: 1024px) {
+        .header-controls { flex-wrap: wrap; justify-content: flex-start; }
+        .card { padding: 15px; }
+        .score-grid { justify-content: flex-start; }
+        .avg-display { margin-left: 0; margin-top: 10px; width: 100%; }
         
-        @media print {
-            body { padding: 0 !important; background: white !important; }
-            body * { visibility: hidden; }
-            #reportModal, #reportModal * { visibility: visible; }
-            #reportModal { position: absolute; left: 0; top: 0; width: 100%; background: white !important; padding: 0 !important; }
-            .report-content { box-shadow: none !important; border-radius: 0 !important; width: 100% !important; max-width: none !important; margin: 0 !important; padding: 0 !important; }
-            .no-print { display: none !important; }
-            .report-page { height: 285mm; padding: 10mm; box-sizing: border-box; display: flex; flex-direction: column; }
-            .excel-report th { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-            .chart-box { page-break-inside: avoid; }
-        }
-    </style>
+        /* 讓核定區表格在平板上可以水平滑動，不會擠壓內容 */
+        #adminZone .card { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+        #adminZone table { min-width: 850px; } 
+    }
+    
+    /* 4. 列印優化與分頁 */
+    @media print {
+        body { padding: 0 !important; background: white !important; }
+        body * { visibility: hidden; }
+        #reportModal, #reportModal * { visibility: visible; }
+        #reportModal { position: absolute; left: 0; top: 0; width: 100%; background: white !important; padding: 0 !important; }
+        .report-content { box-shadow: none !important; border-radius: 0 !important; width: 100% !important; max-width: none !important; margin: 0 !important; padding: 0 !important; }
+        .no-print { display: none !important; }
+        .report-page { height: 285mm; padding: 10mm; box-sizing: border-box; display: flex; flex-direction: column; }
+        .excel-report th { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        .chart-box { page-break-inside: avoid; }
+    }
+</style>
 </head>
 <body>
 
