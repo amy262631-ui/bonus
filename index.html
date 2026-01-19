@@ -400,23 +400,24 @@ historyCompareChart = new Chart(ctx1, {
         document.getElementById('totalCell').innerText = t.toLocaleString();
     }
 
-  async function openReport(mode) {
+ async function openReport(mode) {
     const inner = document.getElementById('reportInner');
     const name = document.getElementById('selEmp').value;
     
+    // 根據模式決定 API 參數
     const payload = mode === 'all' ? { action: "getHistoryComparison" } : { action: "getHistoryComparison", empName: name };
     
     const res = await fetch(API_URL, { method: "POST", body: JSON.stringify(payload) });
     const r = await res.json();
     
     if (mode === 'all') {
-        // --- 1. 全體總表：3年一頁，Excel框線 ---
+        // --- 1. 全體總表邏輯 (升序排序：2023 在上，2025 在下) ---
         const grouped = r.history.reduce((acc, curr) => {
             if (!acc[curr.year]) acc[curr.year] = [];
             acc[curr.year].push(curr);
             return acc;
         }, {});
-
+        
         const sortedYears = Object.keys(grouped).sort((a, b) => a - b);
         let fullHtml = "";
 
@@ -454,7 +455,7 @@ historyCompareChart = new Chart(ctx1, {
         inner.innerHTML = fullHtml;
 
     } else {
-        // --- 2. 個人報表：歷年明細 + 下方嵌入圖表 ---
+        // --- 2. 個人報表邏輯 (標題包含姓名，表格首欄改為年度) ---
         let html = `
         <div class="report-page">
             <h2 style="text-align:center; margin-bottom: 20px;">${name} - 歷年獎金績效明細報告</h2>
@@ -494,12 +495,11 @@ historyCompareChart = new Chart(ctx1, {
         
         inner.innerHTML = html;
 
-        // 💡 延遲渲染確保 Canvas 已經出現在網頁上
+        // 確保在視窗彈出後渲染圖表
         setTimeout(() => {
             renderReportCharts(r.history);
         }, 500);
     }
-    
     document.getElementById('reportModal').style.display = 'block';
 }
 
@@ -513,7 +513,7 @@ function renderReportCharts(data) {
     const sortedData = data.sort((a,b) => a.year - b.year);
     const labels = sortedData.map(d => d.year + "年");
 
-    // 1. 個人報表長條圖
+    // 長條圖：取消堆疊，移出 Legend 防止遮擋金額
     new Chart(ctxBar, {
         type: 'bar',
         data: {
@@ -529,14 +529,14 @@ function renderReportCharts(data) {
             maintainAspectRatio: false,
             layout: { padding: { top: 40 } },
             plugins: { 
-                legend: { position: 'left' }, // 💡 移到左邊避開金額
+                legend: { position: 'left' },
                 datalabels: { display: true, anchor: 'end', align: 'top', font: { weight: 'bold' } }
             },
             scales: { y: { beginAtZero: true, stacked: false } }
         }
     });
 
-    // 2. 個人報表折線圖
+    // 折線圖：點對點搭接趨勢
     new Chart(ctxLine, {
         type: 'line',
         data: {
